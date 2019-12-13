@@ -526,7 +526,16 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	if user.Session.Provision == nil {
 		sMsg, _ := b.Chat.NewMessage(ch)
-		sMsg.Publish("Starting new session")
+		sMsg.Publish("Starting new session...")
+		sMsg.Publish("All sessions are fully independent. You will have your own full-sized copy of the database.")
+		sMsg.Publish("Feel free to change anything you want, to build and drop indexes, to change schema, etc.")
+		sMsg.Publish("At any time, you can use 'reset' command to cancel the ongoing queries (only yours), and reinitiale the database in your session. Say 'help' to see the full list of commands.")
+		sMsg.Publish("All my responses will be marked with 'Session: N', where N is the number of session – you will have your own number once the session is initialized.")
+		sMsg.Publish("Note, that the EXPLAIN plans here are expected to be identical to production plans, which allows troubleshooting and optimization.")
+		sMsg.Publish("The actual timing values may differ from those that production instances have because actual caches are smaller and data is read from disks more often.")
+		sMsg.Publish("However, the number of bytes and amount of pages involved are the same as on the production servers.")
+		sMsg.Publish("Made with ♥ by Postgres.ai. For bug reports, ideas, MRs: https://gitlab.com/postgres-ai/joe")
+
 		runMsg(sMsg)
 
 		session, err := b.Prov.StartSession()
