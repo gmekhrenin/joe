@@ -534,7 +534,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		sMsg.Publish("Note, that the EXPLAIN plans here are expected to be identical to production plans, which allows troubleshooting and optimization.")
 		sMsg.Publish("The actual timing values may differ from those that production instances have because actual caches are smaller and data is read from disks more often.")
 		sMsg.Publish("However, the number of bytes and amount of pages involved are the same as on the production servers.")
-		sMsg.Publish("Made with ♥ by Postgres.ai. For bug reports, ideas, MRs: https://gitlab.com/postgres-ai/joe")
+		sMsg.Publish("Made with :heart: by Postgres.ai. For bug reports, ideas, MRs: https://gitlab.com/postgres-ai/joe")
 
 		runMsg(sMsg)
 
