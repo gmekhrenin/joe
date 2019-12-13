@@ -105,13 +105,14 @@ const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, 
 	"• `help` — this message\n"
 
 const MSG_SESSION_FOREWORD = "Starting new session...\n\n" +
-    "• All sessions are fully independent. You will have your own full-sized copy of the database.\n" +
-	"• Feel free to change anything you want: build and drop indexes, change schema, etc.\n" +
-	"• At any time, use `reset` to re-initialize the database in your session. This will cancel the ongoing queries in your session. Say `help` to see the full list of commands.\n" +
-	"• All my responses will be marked with `Session: N`, where `N` is the session number (you will have your own number once the session is initialized).\n" +
-	"• Note, that the EXPLAIN plans here are expected to be identical to production plans, which allows troubleshooting and optimization.\n" +
-	"• The actual timing values may differ from those that production instances have because actual caches are smaller and data is read from disks more often. " +
-        "However, the number of bytes and amount of pages involved are the same as on the production servers.\n" +
+    "• Sessions are independent. You will have your own full-sized copy of the database.\n" +
+	"• Feel free to change anything: build and drop indexes, change schema, etc.\n" +
+	"• At any time, use `reset` to re-initialize the database. This will cancel the ongoing queries in your session. Say `help` to see the full list of commands.\n" +
+	"• I will mark my responses with `Session: N`, where `N` is the session number (you will get your number once your session is initialized).\n" +
+	"• The session will be destroyed after 2 hours of inactivity. The corresponding DB clone will be deleted.\n" +
+	"• EXPLAIN plans here are expected to be identical to production plans, essential for SQL microanalysis and optimization.\n" +
+	"• The actual timing values may differ from those that production instances have because actual caches in DB Lab are smaller, therefore reading from disks is required more often. " +
+        "However, the number of bytes and pages/buffers involved into query execution are the same as those on a production server.\n" +
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and MRs are welcome: https://gitlab.com/postgres-ai/joe \n\n"
 
 const MSG_EXEC_OPTION_REQ = "Use `exec` to run query, e.g. `exec drop index some_index_name`"
