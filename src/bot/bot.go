@@ -111,7 +111,7 @@ const MSG_SESSION_FOREWORD = "Starting new session...\n\n" +
 	"• EXPLAIN plans here are expected to be identical to production plans, essential for SQL microanalysis and optimization.\n" +
 	"• The actual timing values may differ from those that production instances have because actual caches in DB Lab are smaller, therefore reading from disks is required more often. " +
 	"However, the number of bytes and pages/buffers involved into query execution are the same as those on a production server.\n" +
-	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and MRs are welcome: https://gitlab.com/postgres-ai/joe \n\n"
+	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and MRs are welcome: https://gitlab.com/postgres-ai/joe \n"
 
 const MSG_EXEC_OPTION_REQ = "Use `exec` to run query, e.g. `exec drop index some_index_name`"
 const MSG_EXPLAIN_OPTION_REQ = "Use `explain` to see the query's plan, e.g. `explain select 1`"
@@ -713,7 +713,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		}
 
 		err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s \n"+
-			"_See other artifacts in a thread_\n",
+			"_See other artifacts in a thread_",
 			filePlan.Permalink, detailsText))
 		if err != nil {
 			log.Err("File: ", err)
