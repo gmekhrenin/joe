@@ -112,7 +112,7 @@ const MSG_SESSION_FOREWORD = "Starting new session...\n\n" +
 	"• The session will be destroyed after 2 hours of inactivity. The corresponding DB clone will be deleted.\n" +
 	"• EXPLAIN plans here are expected to be identical to production plans, essential for SQL microanalysis and optimization.\n" +
 	"• The actual timing values may differ from those that production instances have because actual caches in DB Lab are smaller, therefore reading from disks is required more often. " +
-        "However, the number of bytes and pages/buffers involved into query execution are the same as those on a production server.\n" +
+	"However, the number of bytes and pages/buffers involved into query execution are the same as those on a production server.\n" +
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and MRs are welcome: https://gitlab.com/postgres-ai/joe \n\n"
 
 const MSG_EXEC_OPTION_REQ = "Use `exec` to run query, e.g. `exec drop index some_index_name`"
@@ -421,8 +421,10 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	var ch = ev.Channel
-	var message = strings.TrimSpace(ev.Text)
+	ch := ev.Channel
+	message := strings.TrimSpace(ev.Text)
+	message = strings.TrimLeft(message, "`")
+	message = strings.TrimRight(message, "`")
 
 	// Get user or create a new one.
 	user, ok := b.Users[ev.User]
