@@ -26,8 +26,6 @@ import (
 	"github.com/nlopes/slack/slackevents"
 )
 
-const SHOW_RAW_EXPLAIN = false
-
 const COMMAND_EXPLAIN = "explain"
 const COMMAND_EXEC = "exec"
 const COMMAND_SNAPSHOT = "snapshot"
@@ -638,7 +636,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		filePlanWoExec, err := b.Chat.UploadFile("plan-wo-execution", res, ch, msg.Timestamp)
+		filePlanWoExec, err := b.Chat.UploadFile("plan-wo-execution-text", res, ch, msg.Timestamp)
 		if err != nil {
 			log.Err("File upload failed:", err)
 			failMsg(msg, err.Error())
@@ -668,14 +666,12 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		apiCmd.PlanExecJson = res
 
-		if SHOW_RAW_EXPLAIN {
-			err = msg.Append(res)
-			if err != nil {
-				log.Err("Show plan:", err)
-				failMsg(msg, err.Error())
-				b.failApiCmd(apiCmd, err.Error())
-				return
-			}
+		_, err = b.Chat.UploadFile("plan-json", res, ch, msg.Timestamp)
+		if err != nil {
+			log.Err("File upload failed:", err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
 		}
 
 		explain, err := pgexplain.NewExplain(res, explainConfig)
@@ -730,7 +726,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		filePlan, err := b.Chat.UploadFile("plan", vis, ch, msg.Timestamp)
+		filePlan, err := b.Chat.UploadFile("plan-text", vis, ch, msg.Timestamp)
 		if err != nil {
 			log.Err("File upload failed:", err)
 			failMsg(msg, err.Error())
