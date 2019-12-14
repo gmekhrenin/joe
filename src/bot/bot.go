@@ -628,6 +628,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		apiCmd.PlanText = res
 		planPreview, trnd := cutText(res, PLAN_SIZE, SEPARATOR_PLAN)
 
+		msgInitText := msg.Text
+
 		err = msg.Append(fmt.Sprintf("*Plan:*\n```%s```", planPreview))
 		if err != nil {
 			log.Err("Show plan: ", err)
@@ -666,6 +668,36 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		apiCmd.PlanExecJson = res
 
+		err = msg.Replace(msgInitText)
+		if err != nil {
+			log.Err("Clear plan: ", err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
+		}
+
+		// Visualization.
+		explain, err := pgexplain.NewExplain(res, explainConfig)
+		if err != nil {
+			log.Err("Explain parsing: ", err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
+		}
+
+		vis := explain.RenderPlanText()
+		apiCmd.PlanExecText = vis
+
+		planExecPreview, trnd := cutText(vis, PLAN_SIZE, SEPARATOR_PLAN)
+
+		err = msg.Append(fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
+		if err != nil {
+			log.Err("Show plan with execution:", err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
+		}
+
 		_, err = b.Chat.UploadFile("plan-json", res, ch, msg.Timestamp)
 		if err != nil {
 			log.Err("File upload failed:", err)
@@ -674,9 +706,22 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		explain, err := pgexplain.NewExplain(res, explainConfig)
+		filePlan, err := b.Chat.UploadFile("plan-text", vis, ch, msg.Timestamp)
 		if err != nil {
-			log.Err("Explain parsing: ", err)
+			log.Err("File upload failed:", err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
+		}
+
+		detailsText = ""
+		if trnd {
+			detailsText = " " + CUT_TEXT
+		}
+
+		err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s\n", filePlan.Permalink, detailsText))
+		if err != nil {
+			log.Err("File: ", err)
 			failMsg(msg, err.Error())
 			b.failApiCmd(apiCmd, err.Error())
 			return
@@ -712,41 +757,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		// Visualization.
-		vis := explain.RenderPlanText()
-		apiCmd.PlanExecText = vis
-
-		planExecPreview, trnd := cutText(vis, PLAN_SIZE, SEPARATOR_PLAN)
-
-		err = msg.Append(fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
-		if err != nil {
-			log.Err("Show plan with execution:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		filePlan, err := b.Chat.UploadFile("plan-text", vis, ch, msg.Timestamp)
-		if err != nil {
-			log.Err("File upload failed:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		detailsText = ""
-		if trnd {
-			detailsText = " " + CUT_TEXT
-		}
-
-		err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s\n", filePlan.Permalink, detailsText))
-		if err != nil {
-			log.Err("File: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
+		// Summary.
 		stats := explain.RenderStats()
 		apiCmd.Stats = stats
 
