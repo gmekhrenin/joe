@@ -105,7 +105,7 @@ const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, 
 	"• `help` — this message\n"
 
 const MSG_SESSION_FOREWORD = "Starting new session...\n\n" +
-    "• Sessions are independent. You will have your own full-sized copy of the database.\n" +
+	"• Sessions are independent. You will have your own full-sized copy of the database.\n" +
 	"• Feel free to change anything: build and drop indexes, change schema, etc.\n" +
 	"• At any time, use `reset` to re-initialize the database. This will cancel the ongoing queries in your session. Say `help` to see the full list of commands.\n" +
 	"• I will mark my responses with `Session: N`, where `N` is the session number (you will get your number once your session is initialized).\n" +
