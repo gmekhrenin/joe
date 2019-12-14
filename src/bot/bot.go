@@ -668,14 +668,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		apiCmd.PlanExecJson = res
 
-		err = msg.Replace(msgInitText)
-		if err != nil {
-			log.Err("Clear plan: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
 		// Visualization.
 		explain, err := pgexplain.NewExplain(res, explainConfig)
 		if err != nil {
@@ -690,7 +682,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		planExecPreview, trnd := cutText(vis, PLAN_SIZE, SEPARATOR_PLAN)
 
-		err = msg.Append(fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
+		err = msg.Replace(msgInitText + chatapi.CHAT_APPEND_SEPARATOR +
+			fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
 		if err != nil {
 			log.Err("Show plan with execution:", err)
 			failMsg(msg, err.Error())
