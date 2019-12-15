@@ -23,7 +23,7 @@ certificate (Ubuntu: https://gitlab.com/postgres-ai/joe/snippets/1876422).
     - Ubuntu: In some cases, standard Ubuntu package might not work. See
 https://gitlab.com/postgres-ai/joe/snippets/1880315.
     - On macOS: `brew install golang`
-1. Run `make all`.
+1. Run `make all` in the project directory.
 
 ### 2. ZFS Store
 1. If needed (when working in "local" mode), install ZFS (Ubuntu:
