@@ -713,7 +713,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		}
 
 		err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s \n"+
-			"_See other artifacts in a thread_",
+			"_Other artifacts are provided in the thread_",
 			filePlan.Permalink, detailsText))
 		if err != nil {
 			log.Err("File: ", err)
