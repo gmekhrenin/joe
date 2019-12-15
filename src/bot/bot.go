@@ -685,7 +685,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		err = msg.Replace(msgInitText + chatapi.CHAT_APPEND_SEPARATOR +
 			fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
 		if err != nil {
-			log.Err("Show plan with execution:", err)
+			log.Err("Show the plan with execution:", err)
 			failMsg(msg, err.Error())
 			b.failApiCmd(apiCmd, err.Error())
 			return
