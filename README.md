@@ -61,4 +61,4 @@ Deploy Joe instance in your infrastructure. You would need to:
 Unless being run in the "local" mode, Joe will automatically provision AWS EC2
 or GCP GCE instance of Postgres.
 
-Privileged `postgres` user required to for "local" and "mulocal" modes.
+Privileged `postgres` user is required to run Joe in "local" and "mulocal" modes.
