@@ -15,12 +15,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"./bot"
-	"./chatapi"
-	"./ec2ctrl"
-	"./log"
-	"./pgexplain"
-	"./provision"
+	"gitlab.com/postgres-ai/joe/pkg/bot"
+	"gitlab.com/postgres-ai/joe/pkg/chatapi"
+	"gitlab.com/postgres-ai/joe/pkg/ec2ctrl"
+	"gitlab.com/postgres-ai/joe/pkg/log"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/provision"
 
 	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v2"

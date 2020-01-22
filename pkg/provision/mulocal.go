@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 )
 
 const (

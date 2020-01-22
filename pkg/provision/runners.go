@@ -12,8 +12,8 @@ import (
 	"strings"
 	"syscall"
 
-	"../ec2ctrl"
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/ec2ctrl"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 )
 
 const (

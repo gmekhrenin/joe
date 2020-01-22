@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"../log"
-	"../util"
+	"gitlab.com/postgres-ai/joe/pkg/log"
+	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 // We use "pg_ctl -D ... -m immediate stop" because we need to shut down

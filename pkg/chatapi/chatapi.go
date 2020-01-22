@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"

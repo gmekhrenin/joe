@@ -13,10 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"../ec2ctrl"
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/ec2ctrl"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 
-	"github.com/docker/machine/libmachine/ssh"
 	"github.com/tkanos/gonfig"
 )
 
@@ -40,7 +39,6 @@ type provisionAws struct {
 	instanceId        string
 	instanceIp        string
 	sessionId         string
-	sshClient         ssh.Client
 	dockerContainerId string
 }
 
@@ -379,12 +377,12 @@ func (j *provisionAws) stopInstance() error {
 func (j *provisionAws) startInstanceSsh() error {
 	log.Dbg("Establishing connection to the instance using SSH...")
 
-	var err error
+	//var err error
 
-	j.sshClient, err = j.ec2ctrl.GetInstanceSshClient(j.instanceId)
-	if err != nil || j.sshClient == nil {
-		return fmt.Errorf("Cannot connect to the instance using SSH. %v", err)
-	}
+	//j.sshClient, err = j.ec2ctrl.GetInstanceSshClient(j.instanceId)
+	//if err != nil || j.sshClient == nil {
+	//	return fmt.Errorf("Cannot connect to the instance using SSH. %v", err)
+	//}
 
 	return j.ec2ctrl.WaitInstanceForSsh()
 }

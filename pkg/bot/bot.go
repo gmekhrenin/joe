@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"../chatapi"
-	"../log"
-	"../pgexplain"
-	"../provision"
-	"../util"
+	"gitlab.com/postgres-ai/joe/pkg/chatapi"
+	"gitlab.com/postgres-ai/joe/pkg/log"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/provision"
+	"gitlab.com/postgres-ai/joe/pkg/util"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/hako/durafmt"

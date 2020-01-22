@@ -7,7 +7,7 @@ package provision
 import (
 	"fmt"
 
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 )
 
 const (

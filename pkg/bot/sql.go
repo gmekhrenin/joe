@@ -5,7 +5,7 @@
 package bot
 
 import (
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 	"database/sql"
 )
 

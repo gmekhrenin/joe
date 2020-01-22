@@ -12,20 +12,17 @@ package ec2ctrl
 import (
 	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-	"github.com/docker/machine/libmachine/mcnutils"
-	"github.com/docker/machine/libmachine/ssh"
 )
 
 const (
@@ -77,7 +74,7 @@ type Ec2Configuration struct {
 type Ec2Ctrl struct {
 	configuration           Ec2Configuration
 	ec2Client               *ec2.EC2
-	sshClient               ssh.Client
+	//sshClient               ssh.Client
 	securityGroupName       string
 	vpcId                   string
 	subNetId                string
@@ -232,21 +229,21 @@ func (e *Ec2Ctrl) CreateSpotInstanceRequest(price float64) (string, error) {
 }
 
 func (e *Ec2Ctrl) CreateSpotInstance(price float64) (string, error) {
-	_, ierr := e.CreateSpotInstanceRequest(price)
-	if ierr != nil {
-		return "", fmt.Errorf("Unable to create spot instances request.")
-	}
-	// wait for request ready
-	if err := mcnutils.WaitFor(e.spotInstanceRequestReady()); err != nil {
-		e.CancelSpotInstanceReuest(e.requestId)
-		return "", err
-	}
-	// wait for instance ready
-	if err := mcnutils.WaitFor(e.spotInstanceReady()); err != nil {
-		e.CancelSpotInstanceReuest(e.requestId)
-		e.TerminateInstance(e.instanceId)
-		return "", err
-	}
+	//_, ierr := e.CreateSpotInstanceRequest(price)
+	//if ierr != nil {
+	//	return "", fmt.Errorf("Unable to create spot instances request.")
+	//}
+	//// wait for request ready
+	//if err := mcnutils.WaitFor(e.spotInstanceRequestReady()); err != nil {
+	//	e.CancelSpotInstanceReuest(e.requestId)
+	//	return "", err
+	//}
+	//// wait for instance ready
+	//if err := mcnutils.WaitFor(e.spotInstanceReady()); err != nil {
+	//	e.CancelSpotInstanceReuest(e.requestId)
+	//	e.TerminateInstance(e.instanceId)
+	//	return "", err
+	//}
 	return e.instanceId, nil
 }
 
@@ -509,9 +506,9 @@ func (e *Ec2Ctrl) configureSecurityGroups(groupNames []string) error {
 			}
 			// wait until created (dat eventual consistency)
 			//log.Debugf("waiting for group (%s) to become available", *group.GroupId)
-			if err := mcnutils.WaitFor(e.securityGroupAvailableFunc(*group.GroupId)); err != nil {
-				return err
-			}
+			//if err := mcnutils.WaitFor(e.securityGroupAvailableFunc(*group.GroupId)); err != nil {
+			//	return err
+			//}
 		}
 		e.securityGroupIds = append(e.securityGroupIds, *group.GroupId)
 
@@ -622,50 +619,52 @@ func (e *Ec2Ctrl) IsInstanceRunning(instanceId string) (bool, error) {
 }
 
 // Get SSH client for instance
-func (e *Ec2Ctrl) GetInstanceSshClient(instanceId string) (ssh.Client, error) {
-	if _, err := os.Stat(e.configuration.AwsKeyPath); err != nil {
-		return nil, fmt.Errorf("File given as AwsKeyPath does not exist.")
-	}
-	if e.instanceId != instanceId {
-		return nil, fmt.Errorf("Unable to get a instance SSH client. May be instance not started.")
-	}
-	address, err := e.GetPublicInstanceIpAddress(instanceId)
-	if err != nil {
-		return nil, err
-	}
-	port := DefaultSshPort
-	var auth *ssh.Auth
-	if e.configuration.AwsKeyPath == "" {
-		auth = &ssh.Auth{}
-	} else {
-		auth = &ssh.Auth{
-			Keys: []string{e.configuration.AwsKeyPath},
-		}
-	}
-	client, err := ssh.NewClient(DefaultSshUser, address, port, auth)
-	e.sshClient = client
-	return client, err
-}
+//func (e *Ec2Ctrl) GetInstanceSshClient(instanceId string) (ssh.Client, error) {
+//	if _, err := os.Stat(e.configuration.AwsKeyPath); err != nil {
+//		return nil, fmt.Errorf("File given as AwsKeyPath does not exist.")
+//	}
+//	if e.instanceId != instanceId {
+//		return nil, fmt.Errorf("Unable to get a instance SSH client. May be instance not started.")
+//	}
+//	address, err := e.GetPublicInstanceIpAddress(instanceId)
+//	if err != nil {
+//		return nil, err
+//	}
+//	port := DefaultSshPort
+//	var auth *ssh.Auth
+//	if e.configuration.AwsKeyPath == "" {
+//		auth = &ssh.Auth{}
+//	} else {
+//		auth = &ssh.Auth{
+//			Keys: []string{e.configuration.AwsKeyPath},
+//		}
+//	}
+//	client, err := ssh.NewClient(DefaultSshUser, address, port, auth)
+//	e.sshClient = client
+//	return client, err
+//}
 
 // Execute command on instance via SSH
 func (e *Ec2Ctrl) RunInstanceSshCommand(command string, showStatus bool) (string, error) {
-	client := e.sshClient
+	//client := e.sshClient
+	var client interface{}
 	if client == nil {
 		return "", fmt.Errorf("Instance SSH client not available yet.")
 	}
 	log.Dbg("EC2 SSH command: " + command)
-	output, err := client.Output(command)
-	if err != nil {
-		if showStatus {
-			log.Err(command + " " + log.FAIL)
-		}
-		return "", fmt.Errorf(`ssh command error:\ncommand : %s\nerr     : %v\noutput  : %s`, command, err, output)
-	}
-	if showStatus {
-		log.Msg(command + " " + log.OK)
-	}
+	//output, err := client.Output(command)
+	//if err != nil {
+	//	if showStatus {
+	//		log.Err(command + " " + log.FAIL)
+	//	}
+	//	return "", fmt.Errorf(`ssh command error:\ncommand : %s\nerr     : %v\noutput  : %s`, command, err, output)
+	//}
+	//if showStatus {
+	//	log.Msg(command + " " + log.OK)
+	//}
 
-	return output, nil
+	//return output, nil
+	return "", nil
 }
 
 func (e *Ec2Ctrl) sshAvailableFunc() func() bool {
@@ -681,13 +680,13 @@ func (e *Ec2Ctrl) sshAvailableFunc() func() bool {
 
 // Wait SSH access to instance
 func (e *Ec2Ctrl) WaitInstanceForSsh() error {
-	if e.instanceId == "" || e.sshClient == nil {
-		return fmt.Errorf("SSH client is not initialized.")
-	}
+	//if e.instanceId == "" || e.sshClient == nil {
+	//	return fmt.Errorf("SSH client is not initialized.")
+	//}
 	// Try to dial SSH for 30 seconds before timing out.
-	if err := mcnutils.WaitFor(e.sshAvailableFunc()); err != nil {
-		return fmt.Errorf("Too many retries waiting for SSH to be available.  Last error: %s", err)
-	}
+	//if err := mcnutils.WaitFor(e.sshAvailableFunc()); err != nil {
+	//	return fmt.Errorf("Too many retries waiting for SSH to be available.  Last error: %s", err)
+	//}
 	return nil
 }
 

@@ -11,7 +11,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"../log"
+	"gitlab.com/postgres-ai/joe/pkg/log"
 )
 
 type ApiCommand struct {

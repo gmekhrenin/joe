@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"../util"
+	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 func ZfsCreateClone(r Runner, pool string, name string, snapshot string,
