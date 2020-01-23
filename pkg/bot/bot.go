@@ -21,6 +21,8 @@ import (
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
+	"github.com/rs/xid"
+	"github.com/sethvargo/go-password/password"
 
 	"gitlab.com/postgres-ai/database-lab/client"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
@@ -162,7 +164,7 @@ type Config struct {
 
 // DBLab contains Database Lab config.
 type DBLab struct {
-	URL string
+	URL   string
 	Token string
 }
 
@@ -199,7 +201,7 @@ type UserSession struct {
 
 	ChannelIds []string
 
-	Clone     *models.Clone
+	Clone *models.Clone
 }
 
 func NewBot(config Config, chat *chatapi.Chat, dbLab *client.Client) *Bot {
@@ -548,13 +550,19 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		runMsg(sMsg)
 
+		pwd, err := password.Generate(12, 4, 4, false, true)
+		if err != nil {
+			failMsg(sMsg, err.Error())
+			return
+		}
+
 		clientRequest := client.CreateRequest{
-			Name:      "Random1",
-			Project:   "TBD",
+			Name:      xid.New().String(),
+			Project:   user.Session.PlatformSessionId,
 			Protected: false,
 			DB: &client.DatabaseRequest{
-				Username: "postgres",
-				Password: "postgres",
+				Username: user.ChatUser.Name,
+				Password: pwd,
 			},
 		}
 

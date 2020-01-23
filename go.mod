@@ -10,7 +10,9 @@ require (
 	github.com/lib/pq v1.3.0
 	github.com/nlopes/slack v0.6.0
 	github.com/pkg/errors v0.8.1
+	github.com/rs/xid v1.2.1
 	github.com/sergi/go-diff v1.1.0
+	github.com/sethvargo/go-password v0.1.3
 	github.com/sirupsen/logrus v1.4.2
 	gitlab.com/postgres-ai/database-lab v0.0.0-20200121164245-853cec75f92d
 	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3 // indirect
