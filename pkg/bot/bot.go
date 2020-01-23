@@ -27,7 +27,6 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/provision"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
@@ -151,7 +150,7 @@ type Config struct {
 	QuotaInterval uint // Seconds.
 	IdleInterval  uint // Seconds.
 
-	DbName string
+	DBLab DBLab
 
 	ApiUrl         string
 	ApiToken       string
@@ -159,6 +158,12 @@ type Config struct {
 	HistoryEnabled bool
 
 	Version string
+}
+
+// DBLab contains Database Lab config.
+type DBLab struct {
+	URL string
+	Token string
 }
 
 type Bot struct {
@@ -194,7 +199,6 @@ type UserSession struct {
 
 	ChannelIds []string
 
-	Provision *provision.Session
 	Clone     *models.Clone
 }
 
@@ -233,7 +237,7 @@ func (b *Bot) stopIdleSessions() error {
 		}
 
 		s := u.Session
-		if s.Provision == nil {
+		if s.Clone == nil {
 			continue
 		}
 
@@ -287,18 +291,15 @@ func (b *Bot) stopIdleSessions() error {
 }
 
 func (b *Bot) stopAllSessions() error {
-	// TODO(akartasov): remove all clones
 	for _, u := range b.Users {
-		if u == nil {
+		if u == nil || u.Session.Clone == nil {
 			continue
 		}
 
-		s := u.Session
-		if s.Provision == nil {
+		if err := b.stopSession(u); err != nil {
+			log.Errf("Failed to stop session %q: %v\n", u.Session.Clone.ID, err)
 			continue
 		}
-
-		b.stopSession(u)
 	}
 
 	return nil
@@ -307,15 +308,12 @@ func (b *Bot) stopAllSessions() error {
 func (b *Bot) stopSession(u *User) error {
 	log.Dbg("Stopping session...")
 
-	err := b.DBLab.DestroyClone(context.TODO(), u.Session.Provision.ID)
-
-	u.Session.Provision = nil
-	u.Session.PlatformSessionId = ""
-
-	if err != nil {
-		log.Err(err)
-		return err
+	if err := b.DBLab.DestroyClone(context.TODO(), u.Session.Clone.ID); err != nil {
+		return errors.Wrap(err, "failed to destroy clone")
 	}
+
+	u.Session.Clone = nil
+	u.Session.PlatformSessionId = ""
 
 	return nil
 }
@@ -853,18 +851,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			"it may take a couple of minutes...\n" +
 			"If you want to reset the state of the database use `reset` command.")
 
-		//err = b.DBLab.Reinit()
-		err = errors.New(`method is unsupported for now`)
-		if err != nil {
-			log.Err("Hardreset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		// TODO(akartasov): Remove all clones.
-		err = b.stopAllSessions()
-		if err != nil {
+		if err := b.stopAllSessions(); err != nil {
 			log.Err("Hardreset:", err)
 			failMsg(msg, err.Error())
 			b.failApiCmd(apiCmd, err.Error())

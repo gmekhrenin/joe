@@ -30,12 +30,9 @@ var opts struct {
 	AccessToken       string `short:"t" long:"token" description:"\"Bot User OAuth Access Token\" which starts with \"xoxb-\"" env:"CHAT_TOKEN" required:"true"`
 	VerificationToken string `short:"v" long:"verification-token" description:"callback URL verification token" env:"CHAT_VERIFICATION_TOKEN" required:"true"`
 
-	// Database.
-	DbHost     string `short:"h" long:"host" description:"database server host" env:"DB_HOST" default:"localhost"`
-	DbPort     uint   `short:"p" long:"port" description:"database server port" env:"DB_PORT" default:"5432"`
-	DbUser     string `short:"U" long:"username" description:"database user name" env:"DB_USER" default:"postgres"`
-	DbPassword string `short:"P" long:"password" description:"database password" env:"DB_PASSWORD" default:"postgres"`
-	DbName     string `short:"d" long:"dbname" description:"database name to connect to" env:"DB_NAME" default:"db"`
+	// Database Lab.
+	DBLabURL   string `long:"dblab-url" description:"Database Lab URL" env:"DBLAB_URL" default:"localhost"`
+	DBLabToken string `long:"dblab-token" description:"Database Lab token" env:"DBLAB_TOKEN" default:"xxx"`
 
 	// HTTP Server.
 	ServerPort uint `short:"s" long:"http-port" description:"HTTP server port" env:"SERVER_PORT" default:"3000"`
@@ -102,7 +99,10 @@ func main() {
 		QuotaInterval: opts.QuotaInterval,
 		IdleInterval:  opts.IdleInterval,
 
-		DbName: opts.DbName,
+		DBLab: bot.DBLab{
+			URL:   opts.DBLabURL,
+			Token: opts.DBLabToken,
+		},
 
 		ApiUrl:         opts.ApiUrl,
 		ApiToken:       opts.ApiToken,
