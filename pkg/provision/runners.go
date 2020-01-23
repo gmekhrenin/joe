@@ -12,8 +12,7 @@ import (
 	"strings"
 	"syscall"
 
-	"gitlab.com/postgres-ai/joe/pkg/ec2ctrl"
-	"gitlab.com/postgres-ai/joe/pkg/log"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 )
 
 const (
@@ -129,26 +128,6 @@ func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
 	log.Dbg(fmt.Sprintf(`Run(Local): output "%s"`, logOut))
 
 	return outFormatted, nil
-}
-
-// EC2.
-// TODO(anatoly): Use in ProvisionAws.
-type Ec2Runner struct {
-	ec2ctrl *ec2ctrl.Ec2Ctrl
-}
-
-func NewEc2Runner(ctrl *ec2ctrl.Ec2Ctrl) *Ec2Runner {
-	r := &Ec2Runner{
-		ec2ctrl: ctrl,
-	}
-
-	return r
-}
-
-func (r *Ec2Runner) Run(command string, options ...bool) (string, error) {
-	// TODO(anatoly): RunnerError and exit status support.
-	logsEnabled := parseOptions(options...)
-	return r.ec2ctrl.RunInstanceSshCommand(command, logsEnabled)
 }
 
 // Docker.

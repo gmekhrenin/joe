@@ -6,6 +6,7 @@ package bot
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -14,17 +15,20 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/postgres-ai/joe/pkg/chatapi"
-	"gitlab.com/postgres-ai/joe/pkg/log"
-	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/provision"
-	"gitlab.com/postgres-ai/joe/pkg/util"
-
 	"github.com/dustin/go-humanize/english"
 	"github.com/hako/durafmt"
 	_ "github.com/lib/pq"
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
+	"github.com/pkg/errors"
+
+	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
+	"gitlab.com/postgres-ai/database-lab/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/chatapi"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/provision"
+	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 const COMMAND_EXPLAIN = "explain"
@@ -160,7 +164,7 @@ type Config struct {
 type Bot struct {
 	Config Config
 	Chat   *chatapi.Chat
-	Prov   provision.Provision
+	DBLab  *client.Client
 	Users  map[string]*User // Slack UID -> User.
 }
 
@@ -191,13 +195,14 @@ type UserSession struct {
 	ChannelIds []string
 
 	Provision *provision.Session
+	Clone     *models.Clone
 }
 
-func NewBot(config Config, chat *chatapi.Chat, prov provision.Provision) *Bot {
+func NewBot(config Config, chat *chatapi.Chat, dbLab *client.Client) *Bot {
 	bot := Bot{
 		Config: config,
 		Chat:   chat,
-		Prov:   prov,
+		DBLab:  dbLab,
 		Users:  make(map[string]*User),
 	}
 	return &bot
@@ -282,6 +287,7 @@ func (b *Bot) stopIdleSessions() error {
 }
 
 func (b *Bot) stopAllSessions() error {
+	// TODO(akartasov): remove all clones
 	for _, u := range b.Users {
 		if u == nil {
 			continue
@@ -301,7 +307,7 @@ func (b *Bot) stopAllSessions() error {
 func (b *Bot) stopSession(u *User) error {
 	log.Dbg("Stopping session...")
 
-	err := b.Prov.StopSession(u.Session.Provision)
+	err := b.DBLab.DestroyClone(context.TODO(), u.Session.Provision.ID)
 
 	u.Session.Provision = nil
 	u.Session.PlatformSessionId = ""
@@ -538,39 +544,35 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	if user.Session.Provision == nil {
+	if user.Session.Clone == nil {
 		sMsg, _ := b.Chat.NewMessage(ch)
 		sMsg.Publish(MSG_SESSION_FOREWORD)
 
 		runMsg(sMsg)
 
-		session, err := b.Prov.StartSession()
-		if err != nil {
-			switch err.(type) {
-			case provision.NoRoomError:
-				err = b.stopIdleSessions()
-				if err != nil {
-					failMsg(sMsg, err.Error())
-					return
-				}
-
-				session, err = b.Prov.StartSession()
-				if err != nil {
-					failMsg(sMsg, err.Error())
-					return
-				}
-			default:
-				failMsg(sMsg, err.Error())
-				return
-			}
+		clientRequest := client.CreateRequest{
+			Name:      "Random1",
+			Project:   "TBD",
+			Protected: false,
+			DB: &client.DatabaseRequest{
+				Username: "postgres",
+				Password: "postgres",
+			},
 		}
 
-		user.Session.Provision = session
+		//session, err := b.Prov.StartSession()
+		clone, err := b.DBLab.CreateClone(context.TODO(), clientRequest)
+		if err != nil {
+			failMsg(sMsg, err.Error())
+			return
+		}
+		user.Session.Clone = clone
 
 		if b.Config.HistoryEnabled {
 			sId, err := b.ApiCreateSession(user.ChatUser.ID, user.ChatUser.Name, ch)
 			if err != nil {
 				log.Err("API: Create platform session:", err)
+
 				b.stopSession(user)
 				failMsg(sMsg, err.Error())
 				return
@@ -579,21 +581,28 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			user.Session.PlatformSessionId = sId
 		}
 
-		sId := session.Id
-		if len(user.Session.PlatformSessionId) > 0 {
+		// clone ID
+		sId := clone.ID
+		if user.Session.PlatformSessionId != "" {
 			sId = user.Session.PlatformSessionId
 		}
 
 		sMsg.Append(fmt.Sprintf("Session started: `%s`", sId))
 		okMsg(sMsg)
 	}
+
 	msgText = appendSessionId(msgText, user)
 
-	connStr := user.Session.Provision.GetConnStr(b.Config.DbName)
+	connStr := user.Session.Clone.Db.ConnStr
+	//connStr := user.Session.Provision.GetConnStr(b.Config.DbName)
 
 	msg, err := b.Chat.NewMessage(ch)
-	err = msg.Publish(msgText)
 	if err != nil {
+		log.Err("Bot: Cannot create a message", err)
+		return
+	}
+
+	if err := msg.Publish(msgText); err != nil {
 		// TODO(anatoly): Retry.
 		log.Err("Bot: Cannot publish a message", err)
 		return
@@ -803,7 +812,9 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		err = b.Prov.CreateSnapshot(query)
+		// TODO(akartasov): Add method to API.
+		//err = b.Prov.CreateSnapshot(query)
+		err = errors.New("an unsupported command for now")
 		if err != nil {
 			log.Err("Snapshot: ", err)
 			failMsg(msg, err.Error())
@@ -816,7 +827,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		// TODO(anatoly): "zfs rollback" deletes newer snapshots. Users will be able
 		// to jump across snapshots if we solve it.
-		err = b.Prov.ResetSession(user.Session.Provision)
+		//err = b.DBLab.ResetSession(user.Session.Provision)
+		err = b.DBLab.ResetClone(context.TODO(), user.Session.Clone.ID)
 		if err != nil {
 			log.Err("Reset:", err)
 			failMsg(msg, err.Error())
@@ -841,7 +853,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			"it may take a couple of minutes...\n" +
 			"If you want to reset the state of the database use `reset` command.")
 
-		err = b.Prov.Reinit()
+		//err = b.DBLab.Reinit()
+		err = errors.New(`method is unsupported for now`)
 		if err != nil {
 			log.Err("Hardreset:", err)
 			failMsg(msg, err.Error())
@@ -849,6 +862,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
+		// TODO(akartasov): Remove all clones.
 		err = b.stopAllSessions()
 		if err != nil {
 			log.Err("Hardreset:", err)
@@ -883,13 +897,20 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		psqlCmd := command + " " + query
 
-		cmd, err := b.Prov.RunPsql(user.Session.Provision, psqlCmd)
-		if err != nil {
-			log.Err(err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
+		// TODO(akartasov): Keep psql for psql commands available to users - runPsqlStrict
+		//  OR
+		//  Use direct connection instead psql.
+		err := errors.New("an unavailable command for now")
+		log.Err(psqlCmd)
+		log.Err(err)
+		//cmd, err := b.Prov.RunPsql(user.Session.Provision, psqlCmd)
+		//if err != nil {
+		//	log.Err(err)
+		//	failMsg(msg, err.Error())
+		//	b.failApiCmd(apiCmd, err.Error())
+		//	return
+		//}
+		cmd := ""
 
 		apiCmd.Response = cmd
 
@@ -940,11 +961,11 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 func appendSessionId(text string, u *User) string {
 	s := "No session\n"
 
-	if u != nil && u.Session.Provision != nil && len(u.Session.Provision.Id) > 0 {
-		sessionId := u.Session.Provision.Id
+	if u != nil && u.Session.Clone != nil && u.Session.Clone.ID != "" {
+		sessionId := u.Session.Clone.ID
 
 		// Use session ID from platform if it's defined.
-		if len(u.Session.PlatformSessionId) > 0 {
+		if u.Session.PlatformSessionId != "" {
 			sessionId = u.Session.PlatformSessionId
 		}
 

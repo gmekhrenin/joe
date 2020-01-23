@@ -15,14 +15,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jessevdk/go-flags"
+	"github.com/sirupsen/logrus"
+	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
-	"gitlab.com/postgres-ai/joe/pkg/ec2ctrl"
-	"gitlab.com/postgres-ai/joe/pkg/log"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/provision"
-
-	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v2"
 )
 
@@ -61,20 +60,6 @@ var opts struct {
 }
 
 // TODO(anatoly): Refactor configs and envs.
-type ProvisionConfig struct {
-	Mode    string                  `yaml:"mode"`
-	Aws     provision.AwsConfig     `yaml:"aws"`
-	Local   provision.LocalConfig   `yaml:"local"`
-	MuLocal provision.MuLocalConfig `yaml:"mulocal"`
-	Debug   bool                    `yaml:"debug"`
-
-	ZfsPool         string `yaml:"zfsPool"`
-	InitialSnapshot string `yaml:"initialSnapshot"`
-
-	PgVersion    string `yaml:"pgVersion"`
-	PgBindir     string `yaml:"pgBindir"`
-	PgDataSubdir string `yaml:"pgDataSubdir"`
-}
 
 func main() {
 	// Load CLI options.
@@ -95,49 +80,15 @@ func main() {
 		log.Err("Unable to load explain config", err)
 		return
 	}
-	provisionConfig, err := loadProvisionConfig()
-	if err != nil {
-		log.Err("Unable to load provision config", err)
-		return
-	}
-	log.DEBUG = provisionConfig.Debug
-	provConf := provision.Config{
-		Mode:    provisionConfig.Mode,
-		Aws:     provisionConfig.Aws,
-		Local:   provisionConfig.Local,
-		MuLocal: provisionConfig.MuLocal,
-		Debug:   provisionConfig.Debug,
 
-		// ZFS.
-		ZfsPool:         provisionConfig.ZfsPool,
-		InitialSnapshot: provisionConfig.InitialSnapshot,
+	dbLabClient, err := client.NewClient(client.Options{
+		Host:              "",
+		VerificationToken: "",
+	}, logrus.New())
 
-		// TODO(anatoly): Use opts.DbPort, opts.DbHost for local and direct mode.
-		DbHost:     opts.DbHost,
-		DbUsername: opts.DbUser,
-		DbPassword: opts.DbPassword,
-		DbName:     opts.DbName,
-
-		PgVersion:    provisionConfig.PgVersion,
-		PgBindir:     provisionConfig.PgBindir,
-		PgDataSubdir: provisionConfig.PgDataSubdir,
-	}
-	if !provision.IsValidConfig(provConf) {
-		log.Err("Wrong configuration format.")
-		os.Exit(1)
-	}
-
-	// Initialize provisioning.
-	prov, err := provision.NewProvision(provConf)
 	if err != nil {
 		log.Fatal("Provision constuct failed", err)
 	}
-
-	err = prov.Init()
-	if err != nil {
-		log.Fatal("Provision init error", err)
-	}
-	log.Dbg("Provision init ok", err)
 
 	log.Dbg("git: ", opts.DevGitCommitHash, opts.DevGitBranch, opts.DevGitModified)
 
@@ -163,7 +114,7 @@ func main() {
 
 	var chat = chatapi.NewChat(opts.AccessToken, opts.VerificationToken)
 
-	joeBot := bot.NewBot(config, chat, prov)
+	joeBot := bot.NewBot(config, chat, dbLabClient)
 	joeBot.RunServer()
 }
 
@@ -189,30 +140,6 @@ func loadExplainConfig() (pgexplain.ExplainConfig, error) {
 	var config pgexplain.ExplainConfig
 
 	err := loadConfig(&config, "explain.yaml")
-	if err != nil {
-		return config, err
-	}
-
-	return config, nil
-}
-
-func loadProvisionConfig() (ProvisionConfig, error) {
-	var config = ProvisionConfig{
-		Aws: provision.AwsConfig{
-			Ec2: ec2ctrl.Ec2Configuration{
-				AwsInstanceType: "r4.large",
-				AwsRegion:       "us-east-1",
-				AwsZone:         "a",
-			},
-		},
-		Mode:            "aws",
-		Debug:           true,
-		PgVersion:       "9.6",
-		ZfsPool:         "zpool",
-		InitialSnapshot: "db_state_1",
-	}
-
-	err := loadConfig(&config, "provisioning.yaml")
 	if err != nil {
 		return config, err
 	}

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.com/postgres-ai/joe/pkg/log"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -72,8 +72,8 @@ type Ec2Configuration struct {
 }
 
 type Ec2Ctrl struct {
-	configuration           Ec2Configuration
-	ec2Client               *ec2.EC2
+	configuration Ec2Configuration
+	ec2Client     *ec2.EC2
 	//sshClient               ssh.Client
 	securityGroupName       string
 	vpcId                   string

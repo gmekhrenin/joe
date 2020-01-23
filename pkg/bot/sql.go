@@ -5,8 +5,9 @@
 package bot
 
 import (
-	"gitlab.com/postgres-ai/joe/pkg/log"
 	"database/sql"
+
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 )
 
 const QUERY_EXPLAIN = "EXPLAIN (FORMAT TEXT) "
