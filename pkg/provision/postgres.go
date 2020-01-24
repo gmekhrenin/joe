@@ -16,16 +16,6 @@ import (
 // TODO(anatoly): Use SQL runner.
 // Use `RunPsqlStrict` for commands defined by a user!
 func runPsql(r Runner, command string, useFile bool) (string, error) {
-	//host := ""
-	//if len(c.Host) > 0 {
-	//	host = "--host " + c.Host + " "
-	//}
-
-	//params := "At" // Tuples only, unaligned.
-	//if formatted {
-	//	params = ""
-	//}
-
 	var filename string
 	commandParam := fmt.Sprintf(`-c "%s"`, command)
 	if useFile {
@@ -42,16 +32,6 @@ func runPsql(r Runner, command string, useFile bool) (string, error) {
 
 		commandParam = fmt.Sprintf(`-f %s`, filename)
 	}
-
-	//psqlCmd := `PGPASSWORD=` + c.getPassword() + ` ` +
-	//	`sudo --user postgres ` +
-	//	c.getBindir() + `/psql ` +
-	//	host +
-	//	`--dbname ` + c.getDbName() + ` ` +
-	//	`--port ` + c.getPortStr() + ` ` +
-	//	`--username ` + c.getUsername() + ` ` +
-	//	`-X` + params + ` ` +
-	//	commandParam
 
 	out, err := r.Run(commandParam)
 

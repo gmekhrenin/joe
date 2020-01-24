@@ -25,12 +25,12 @@ GORUN = GO111MODULE=on go run ${LDFLAGS}
 
 
 # Build the project
-all: clean vet main
+all: clean vet build
 
 dep:
 	go get -v -d -t ./...
 
-main:
+build:
 	${GOBUILD} -o bin/${BINARY} ./cmd/joe/main.go
 
 test:

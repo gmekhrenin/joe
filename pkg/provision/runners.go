@@ -64,67 +64,6 @@ func (e RunnerError) Error() string {
 	return e.Msg
 }
 
-//// Local.
-//type LocalRunner struct {
-//}
-//
-//func NewLocalRunner() *LocalRunner {
-//	r := &LocalRunner{}
-//
-//	return r
-//}
-//
-//func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
-//	command = strings.Trim(command, " \n")
-//	if len(command) == 0 {
-//		return "", fmt.Errorf("Empty command")
-//	}
-//
-//	logsEnabled := parseOptions(options...)
-//
-//	logCommand := HIDDEN
-//	if logsEnabled {
-//		logCommand = command
-//	}
-//
-//	log.Dbg(fmt.Sprintf(`Run(Local): "%s"`, logCommand))
-//
-//	var out bytes.Buffer
-//	var stderr bytes.Buffer
-//
-//	if runtime.GOOS == "windows" {
-//		return "", fmt.Errorf("Windows is not supported")
-//	}
-//
-//	cmd := exec.Command("/bin/bash", "-c", command)
-//
-//	cmd.Stdout = &out
-//	cmd.Stderr = &stderr
-//
-//	// Psql with the file option returns error reponse to stderr with
-//	// success exit code. In that case err will be nil, but we need
-//	// to treat the case as error and read proper output.
-//	err := cmd.Run()
-//
-//	if err != nil || stderr.String() != "" {
-//		runnerError := NewRunnerError(logCommand, stderr.String(), err)
-//
-//		log.Err(runnerError)
-//		return "", runnerError
-//	}
-//
-//	outFormatted := strings.Trim(out.String(), " \n")
-//
-//	logOut := HIDDEN
-//	if logsEnabled {
-//		logOut = outFormatted
-//	}
-//
-//	log.Dbg(fmt.Sprintf(`Run(Local): output "%s"`, logOut))
-//
-//	return outFormatted, nil
-//}
-
 // SQL.
 // TODO(anatoly): Use in ProvisionAws, Postgres functions.
 type SQLRunner struct {
@@ -141,35 +80,19 @@ func NewSqlRunner(connectionString, password string, logEnabled bool) *SQLRunner
 	}
 }
 
-//func (r *SQLRunner) Run(command string, options ...bool) (string, error) {
-//	cmd := fmt.Sprintf(`psql -U postgres -t -c "%s"`, command)
-//	return r.InnerRunner.Run(cmd, options...)
-//}
-
 func (r *SQLRunner) Run(commandParam string) (string, error) {
-	//command = strings.Trim(command, " \n")
-	//if len(command) == 0 {
-	//	return "", fmt.Errorf("Empty command")
-	//}
-
-	//logsEnabled := parseOptions(options...)
-
-	//logCommand := HIDDEN
-	//if logsEnabled {
-	//	logCommand = command
-	//}
-
 	log.Dbg(fmt.Sprintf(`SQLRun: "%s"`, commandParam))
 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	psqlCmd := fmt.Sprintf("%q -X %s", r.connectionString, commandParam)
-	cmd := exec.Command("psql", "-c", psqlCmd)
+	cmdStr := fmt.Sprintf("PGPASSWORD=%s PGSSLMODE=disable psql %s -X %s", r.password, r.connectionString, commandParam)
+	cmd := exec.Command("/bin/bash", "-c", cmdStr)
 
-	cmd.Env = append(cmd.Env, "PGPASSWORD="+r.password)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
+
+	log.Dbg(cmd.String())
 
 	// Psql with the file option returns error reponse to stderr with
 	// success exit code. In that case err will be nil, but we need

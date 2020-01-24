@@ -34,6 +34,9 @@ var opts struct {
 	DBLabURL   string `long:"dblab-url" description:"Database Lab URL" env:"DBLAB_URL" default:"localhost"`
 	DBLabToken string `long:"dblab-token" description:"Database Lab token" env:"DBLAB_TOKEN" default:"xxx"`
 
+	DBName string `short:"d" long:"dbname" description:"database name to connect to" env:"DBLAB_DBNAME" default:"db"`
+	SSLMode string `long:"ssl-mode" description:"ssl mode provides different protection levels of a Database Lab connection." env:"DBLAB_SSL_MODE" default:"require"`
+
 	// HTTP Server.
 	ServerPort uint `short:"s" long:"http-port" description:"HTTP server port" env:"SERVER_PORT" default:"3000"`
 
@@ -53,6 +56,8 @@ var opts struct {
 	DevGitBranch     string `long:"git-branch" env:"GIT_BRANCH" default:""`
 	DevGitModified   bool   `long:"git-modified" env:"GIT_MODIFIED"`
 
+	Debug bool `long:"debug" description:"Enable a debug mode"`
+
 	ShowHelp func() error `long:"help" description:"Show this help message"`
 }
 
@@ -70,6 +75,8 @@ func main() {
 		log.Err("Args parse error", err)
 		return
 	}
+
+	log.DEBUG = opts.Debug
 
 	// Load and validate configuration files.
 	explainConfig, err := loadExplainConfig()
@@ -90,9 +97,11 @@ func main() {
 		QuotaInterval: opts.QuotaInterval,
 		IdleInterval:  opts.IdleInterval,
 
-		DBLab: bot.DBLab{
-			URL:   opts.DBLabURL,
-			Token: opts.DBLabToken,
+		DBLab: bot.DBLabInstance{
+			URL:     opts.DBLabURL,
+			Token:   opts.DBLabToken,
+			DBName:  opts.DBName,
+			SSLMode: opts.SSLMode,
 		},
 
 		ApiUrl:         opts.ApiUrl,

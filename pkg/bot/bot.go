@@ -140,6 +140,8 @@ const CUT_TEXT = "_(The text in the preview above has been cut)_"
 const HINT_EXPLAIN = "Consider using `explain` command for DML statements. See `help` for details."
 const HINT_EXEC = "Consider using `exec` command for DDL statements. See `help` for details."
 
+const dbLabUserNamePrefix = "dblab_"
+
 var hintExplainDmlWords = []string{"insert", "select", "update", "delete", "with"}
 var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
 
@@ -153,7 +155,7 @@ type Config struct {
 	QuotaInterval uint // Seconds.
 	IdleInterval  uint // Seconds.
 
-	DBLab DBLab
+	DBLab DBLabInstance
 
 	ApiUrl         string
 	ApiToken       string
@@ -163,10 +165,12 @@ type Config struct {
 	Version string
 }
 
-// DBLab contains Database Lab config.
-type DBLab struct {
-	URL   string
-	Token string
+// DBLabInstance contains Database Lab config.
+type DBLabInstance struct {
+	URL     string
+	Token   string
+	DBName  string // TODO(akartasov): Make a dynamically used name.
+	SSLMode string
 }
 
 type Bot struct {
@@ -203,6 +207,21 @@ type UserSession struct {
 	ChannelIds []string
 
 	Clone *models.Clone
+}
+
+// DBLabClone contains connection info of a clone.
+type DBLabClone struct {
+	Name     string
+	Host     string
+	Port     string
+	Username string
+	Password string
+	SSL      string
+}
+
+func (db DBLabClone) ConnectionString() string {
+	return fmt.Sprintf("host=%q port=%q user=%q dbname=%q password=%q",
+		db.Host, db.Port, db.Username, db.Name, db.Password)
 }
 
 func NewBot(config Config, chat *chatapi.Chat, dbLab *client.Client) *Bot {
@@ -562,7 +581,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			Project:   user.Session.PlatformSessionId,
 			Protected: false,
 			DB: &client.DatabaseRequest{
-				Username: user.ChatUser.Name,
+				Username: dbLabUserNamePrefix + user.ChatUser.Name,
 				Password: pwd,
 			},
 		}
@@ -573,6 +592,14 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			failMsg(sMsg, err.Error())
 			return
 		}
+
+		time.Sleep(3 * time.Second) // TODO(akartasov): Make synchronous API request.
+		clone, err = b.DBLab.GetClone(context.TODO(), clone.ID)
+		if err != nil {
+			failMsg(sMsg, err.Error())
+			return
+		}
+
 		user.Session.Clone = clone
 		user.Session.Clone.Db.Password = pwd // TODO(akartasov): Should keep a password?
 
@@ -601,8 +628,17 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	msgText = appendSessionId(msgText, user)
 
-	connStr := user.Session.Clone.Db.ConnStr
-	//connStr := user.Session.Provision.GetConnStr(b.Config.DbName)
+	dbLabClone := DBLabClone{
+		Name:     b.Config.DBLab.DBName,
+		Host:     user.Session.Clone.Db.Host,
+		Port:     user.Session.Clone.Db.Port,
+		Username: user.Session.Clone.Db.Username,
+		Password: user.Session.Clone.Db.Password,
+		SSL:      b.Config.DBLab.SSLMode,
+	}
+
+	connStr := dbLabClone.ConnectionString()
+	log.Dbg(connStr)
 
 	msg, err := b.Chat.NewMessage(ch)
 	if err != nil {
@@ -835,7 +871,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		// TODO(anatoly): "zfs rollback" deletes newer snapshots. Users will be able
 		// to jump across snapshots if we solve it.
-		//err = b.DBLab.ResetSession(user.Session.Provision)
+		//err = b.DBLabInstance.ResetSession(user.Session.Provision)
 		err = b.DBLab.ResetClone(context.TODO(), user.Session.Clone.ID)
 		if err != nil {
 			log.Err("Reset:", err)
