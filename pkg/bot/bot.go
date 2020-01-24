@@ -216,7 +216,7 @@ type DBLabClone struct {
 	Port     string
 	Username string
 	Password string
-	SSL      string
+	SSLMode  string
 }
 
 func (db DBLabClone) ConnectionString() string {
@@ -634,7 +634,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		Port:     user.Session.Clone.Db.Port,
 		Username: user.Session.Clone.Db.Username,
 		Password: user.Session.Clone.Db.Password,
-		SSL:      b.Config.DBLab.SSLMode,
+		SSLMode:  b.Config.DBLab.SSLMode,
 	}
 
 	connStr := dbLabClone.ConnectionString()
@@ -931,11 +931,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		psqlCmd := command + " " + query
 
 		// TODO(akartasov): Keep psql for psql commands available to users - runPsqlStrict
-		runner := provision.NewSqlRunner(
-			user.Session.Clone.Db.ConnStr,
-			user.Session.Clone.Db.Password,
-			provision.LogsEnabledDefault,
-		)
+		runner := provision.NewSQLRunner(dbLabClone, provision.LogsEnabledDefault)
 		cmd, err := provision.RunPsqlStrict(runner, psqlCmd)
 		if err != nil {
 			log.Err(err)
