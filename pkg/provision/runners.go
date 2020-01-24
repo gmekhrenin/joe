@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
 	"syscall"
 
@@ -16,12 +15,12 @@ import (
 )
 
 const (
-	LOGS_ENABLED_DEFAULT = true
-	HIDDEN               = "HIDDEN"
+	LogsEnabledDefault = true
+	HIDDEN             = "HIDDEN"
 )
 
 type Runner interface {
-	Run(string, ...bool) (string, error)
+	Run(command string) (output string, err error)
 }
 
 type RunnerError struct {
@@ -65,40 +64,110 @@ func (e RunnerError) Error() string {
 	return e.Msg
 }
 
-// Local.
-type LocalRunner struct {
+//// Local.
+//type LocalRunner struct {
+//}
+//
+//func NewLocalRunner() *LocalRunner {
+//	r := &LocalRunner{}
+//
+//	return r
+//}
+//
+//func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
+//	command = strings.Trim(command, " \n")
+//	if len(command) == 0 {
+//		return "", fmt.Errorf("Empty command")
+//	}
+//
+//	logsEnabled := parseOptions(options...)
+//
+//	logCommand := HIDDEN
+//	if logsEnabled {
+//		logCommand = command
+//	}
+//
+//	log.Dbg(fmt.Sprintf(`Run(Local): "%s"`, logCommand))
+//
+//	var out bytes.Buffer
+//	var stderr bytes.Buffer
+//
+//	if runtime.GOOS == "windows" {
+//		return "", fmt.Errorf("Windows is not supported")
+//	}
+//
+//	cmd := exec.Command("/bin/bash", "-c", command)
+//
+//	cmd.Stdout = &out
+//	cmd.Stderr = &stderr
+//
+//	// Psql with the file option returns error reponse to stderr with
+//	// success exit code. In that case err will be nil, but we need
+//	// to treat the case as error and read proper output.
+//	err := cmd.Run()
+//
+//	if err != nil || stderr.String() != "" {
+//		runnerError := NewRunnerError(logCommand, stderr.String(), err)
+//
+//		log.Err(runnerError)
+//		return "", runnerError
+//	}
+//
+//	outFormatted := strings.Trim(out.String(), " \n")
+//
+//	logOut := HIDDEN
+//	if logsEnabled {
+//		logOut = outFormatted
+//	}
+//
+//	log.Dbg(fmt.Sprintf(`Run(Local): output "%s"`, logOut))
+//
+//	return outFormatted, nil
+//}
+
+// SQL.
+// TODO(anatoly): Use in ProvisionAws, Postgres functions.
+type SQLRunner struct {
+	connectionString string
+	password         string
+	logEnabled       bool
 }
 
-func NewLocalRunner() *LocalRunner {
-	r := &LocalRunner{}
-
-	return r
+func NewSqlRunner(connectionString, password string, logEnabled bool) *SQLRunner {
+	return &SQLRunner{
+		connectionString: connectionString,
+		password:         password,
+		logEnabled:       logEnabled,
+	}
 }
 
-func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
-	command = strings.Trim(command, " \n")
-	if len(command) == 0 {
-		return "", fmt.Errorf("Empty command")
-	}
+//func (r *SQLRunner) Run(command string, options ...bool) (string, error) {
+//	cmd := fmt.Sprintf(`psql -U postgres -t -c "%s"`, command)
+//	return r.InnerRunner.Run(cmd, options...)
+//}
 
-	logsEnabled := parseOptions(options...)
+func (r *SQLRunner) Run(commandParam string) (string, error) {
+	//command = strings.Trim(command, " \n")
+	//if len(command) == 0 {
+	//	return "", fmt.Errorf("Empty command")
+	//}
 
-	logCommand := HIDDEN
-	if logsEnabled {
-		logCommand = command
-	}
+	//logsEnabled := parseOptions(options...)
 
-	log.Dbg(fmt.Sprintf(`Run(Local): "%s"`, logCommand))
+	//logCommand := HIDDEN
+	//if logsEnabled {
+	//	logCommand = command
+	//}
+
+	log.Dbg(fmt.Sprintf(`SQLRun: "%s"`, commandParam))
 
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	if runtime.GOOS == "windows" {
-		return "", fmt.Errorf("Windows is not supported")
-	}
+	psqlCmd := fmt.Sprintf("%q -X %s", r.connectionString, commandParam)
+	cmd := exec.Command("psql", "-c", psqlCmd)
 
-	cmd := exec.Command("/bin/bash", "-c", command)
-
+	cmd.Env = append(cmd.Env, "PGPASSWORD="+r.password)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 
@@ -108,7 +177,7 @@ func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
 	err := cmd.Run()
 
 	if err != nil || stderr.String() != "" {
-		runnerError := NewRunnerError(logCommand, stderr.String(), err)
+		runnerError := NewRunnerError(commandParam, stderr.String(), err)
 
 		log.Err(runnerError)
 		return "", runnerError
@@ -117,68 +186,11 @@ func (r *LocalRunner) Run(command string, options ...bool) (string, error) {
 	outFormatted := strings.Trim(out.String(), " \n")
 
 	logOut := HIDDEN
-	if logsEnabled {
+	if r.logEnabled {
 		logOut = outFormatted
 	}
 
-	log.Dbg(fmt.Sprintf(`Run(Local): output "%s"`, logOut))
+	log.Dbg(fmt.Sprintf(`SQLRun: output "%s"`, logOut))
 
 	return outFormatted, nil
-}
-
-// Docker.
-// TODO(anatoly): Use in ProvisionAws.
-type DockerRunner struct {
-	InnerRunner Runner
-	ContainerId string
-}
-
-func NewDockerRunner(innerRunner Runner, containerId string) *DockerRunner {
-	r := &DockerRunner{
-		InnerRunner: innerRunner,
-		ContainerId: containerId,
-	}
-
-	return r
-}
-
-func (r *DockerRunner) Run(command string, options ...bool) (string, error) {
-	// TODO(anatoly): String quotes escaping can be unsuitable
-	// for some inner runners.
-	command = strings.ReplaceAll(command, "\"", "\\\"")
-	command = strings.ReplaceAll(command, "\n", " ") // For multiline SQL code.
-
-	cId := r.ContainerId
-	cmd := fmt.Sprintf(`sudo docker exec -i %s bash -c "%s"`, cId, command)
-
-	return r.InnerRunner.Run(cmd, options...)
-}
-
-// SQL.
-// TODO(anatoly): Use in ProvisionAws, Postgres functions.
-type SqlRunner struct {
-	InnerRunner Runner
-}
-
-func NewSqlRunner(innerRunner Runner) *DockerRunner {
-	r := &DockerRunner{
-		InnerRunner: innerRunner,
-	}
-
-	return r
-}
-
-func (r *SqlRunner) Run(command string, options ...bool) (string, error) {
-	cmd := fmt.Sprintf(`psql -U postgres -t -c "%s"`, command)
-	return r.InnerRunner.Run(cmd, options...)
-}
-
-// Utils.
-func parseOptions(options ...bool) bool {
-	logsEnabled := LOGS_ENABLED_DEFAULT
-	if len(options) > 0 {
-		logsEnabled = options[0]
-	}
-
-	return logsEnabled
 }

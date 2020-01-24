@@ -895,9 +895,12 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		psqlCmd := command + " " + query
 
 		// TODO(akartasov): Keep psql for psql commands available to users - runPsqlStrict
-		//  OR
-		//  Use direct connection instead psql.
-		cmd, err := provision.RunPsql(*user.Session.Clone.Db, psqlCmd)
+		runner := provision.NewSqlRunner(
+			user.Session.Clone.Db.ConnStr,
+			user.Session.Clone.Db.Password,
+			provision.LogsEnabledDefault,
+		)
+		cmd, err := provision.RunPsqlStrict(runner, psqlCmd)
 		if err != nil {
 			log.Err(err)
 			failMsg(msg, err.Error())
