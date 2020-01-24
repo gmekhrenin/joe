@@ -7,11 +7,11 @@ package provision
 import (
 	"bytes"
 	"fmt"
-	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"os/exec"
 	"strings"
 	"syscall"
 
+	"gitlab.com/postgres-ai/joe/pkg/dblab"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 )
 
@@ -69,10 +69,10 @@ func (e RunnerError) Error() string {
 // TODO(anatoly): Use in ProvisionAws, Postgres functions.
 type SQLRunner struct {
 	logEnabled bool
-	clone      bot.DBLabClone
+	clone      dblab.Clone
 }
 
-func NewSQLRunner(clone bot.DBLabClone, logEnabled bool) *SQLRunner {
+func NewSQLRunner(clone dblab.Clone, logEnabled bool) *SQLRunner {
 	return &SQLRunner{
 		clone:      clone,
 		logEnabled: logEnabled,
@@ -85,7 +85,7 @@ func (r *SQLRunner) Run(commandParam string) (string, error) {
 	var out bytes.Buffer
 	var stderr bytes.Buffer
 
-	cmdStr := fmt.Sprintf("PGPASSWORD=%s PGSSLMODE=%s psql --host=%s --port=%s --dbname=%q -X %s",
+	cmdStr := fmt.Sprintf("PGPASSWORD=%s PGSSLMODE=%s psql --host=%s --port=%s --user=%q --dbname=%q -X %s",
 		r.clone.Password, r.clone.SSLMode, r.clone.Host, r.clone.Port, r.clone.Username, r.clone.Name, commandParam)
 
 	cmd := exec.Command("/bin/bash", "-c", cmdStr)

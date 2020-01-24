@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gitlab.com/postgres-ai/joe/pkg/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/provision"
 	"html"
 	"net/http"
@@ -207,21 +208,6 @@ type UserSession struct {
 	ChannelIds []string
 
 	Clone *models.Clone
-}
-
-// DBLabClone contains connection info of a clone.
-type DBLabClone struct {
-	Name     string
-	Host     string
-	Port     string
-	Username string
-	Password string
-	SSLMode  string
-}
-
-func (db DBLabClone) ConnectionString() string {
-	return fmt.Sprintf("host=%q port=%q user=%q dbname=%q password=%q",
-		db.Host, db.Port, db.Username, db.Name, db.Password)
 }
 
 func NewBot(config Config, chat *chatapi.Chat, dbLab *client.Client) *Bot {
@@ -628,7 +614,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	msgText = appendSessionId(msgText, user)
 
-	dbLabClone := DBLabClone{
+	dbLabClone := dblab.Clone{
 		Name:     b.Config.DBLab.DBName,
 		Host:     user.Session.Clone.Db.Host,
 		Port:     user.Session.Clone.Db.Port,
