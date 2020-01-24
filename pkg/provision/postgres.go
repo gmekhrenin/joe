@@ -6,6 +6,7 @@ package provision
 
 import (
 	"fmt"
+	"gitlab.com/postgres-ai/database-lab/pkg/models"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -79,6 +80,7 @@ func (c PgConfig) getDbName() string {
 
 	return "postgres"
 }
+
 //
 //func PostgresStart(r Runner, c *PgConfig) error {
 //	log.Dbg("Starting Postgres...")
@@ -267,11 +269,11 @@ func (c PgConfig) getDbName() string {
 
 // TODO(anatoly): Use SQL runner.
 // Use `runPsqlStrict` for commands defined by a user!
-func runPsql(r Runner, command string, c *PgConfig, formatted bool, useFile bool) (string, error) {
-	host := ""
-	if len(c.Host) > 0 {
-		host = "--host " + c.Host + " "
-	}
+func runPsql(r Runner, command string, database models.Database, formatted bool, useFile bool) (string, error) {
+	//host := ""
+	//if len(c.Host) > 0 {
+	//	host = "--host " + c.Host + " "
+	//}
 
 	params := "At" // Tuples only, unaligned.
 	if formatted {
@@ -295,15 +297,18 @@ func runPsql(r Runner, command string, c *PgConfig, formatted bool, useFile bool
 		commandParam = fmt.Sprintf(`-f %s`, filename)
 	}
 
-	psqlCmd := `PGPASSWORD=` + c.getPassword() + ` ` +
-		`sudo --user postgres ` +
-		c.getBindir() + `/psql ` +
-		host +
-		`--dbname ` + c.getDbName() + ` ` +
-		`--port ` + c.getPortStr() + ` ` +
-		`--username ` + c.getUsername() + ` ` +
-		`-X` + params + ` ` +
-		commandParam
+	psqlCmd := fmt.Sprintf("PGPASSWORD=%s psql %q -X%s %s",
+		database.Password, database.ConnStr, params, commandParam)
+
+	//psqlCmd := `PGPASSWORD=` + c.getPassword() + ` ` +
+	//	`sudo --user postgres ` +
+	//	c.getBindir() + `/psql ` +
+	//	host +
+	//	`--dbname ` + c.getDbName() + ` ` +
+	//	`--port ` + c.getPortStr() + ` ` +
+	//	`--username ` + c.getUsername() + ` ` +
+	//	`-X` + params + ` ` +
+	//	commandParam
 
 	out, err := r.Run(psqlCmd)
 
@@ -317,7 +322,7 @@ func runPsql(r Runner, command string, c *PgConfig, formatted bool, useFile bool
 // Use for user defined commands to DB. Currently we only need
 // to support limited number of PSQL meta information commands.
 // That's why it's ok to restrict usage of some symbols.
-func runPsqlStrict(r Runner, command string, c *PgConfig) (string, error) {
+func runPsqlStrict(r Runner, command string, database models.Database) (string, error) {
 	command = strings.Trim(command, " \n")
 	if len(command) == 0 {
 		return "", fmt.Errorf("Empty command")
@@ -341,7 +346,7 @@ func runPsqlStrict(r Runner, command string, c *PgConfig) (string, error) {
 	// Restricting usage of multiline commands.
 	command = strings.ReplaceAll(command, "\n", "")
 
-	out, err := runPsql(r, command, c, true, true)
+	out, err := runPsql(r, command, database, true, true)
 	if err != nil {
 		if rerr, ok := err.(RunnerError); ok {
 			return "", fmt.Errorf("Pqsl error: %s", rerr.Stderr)

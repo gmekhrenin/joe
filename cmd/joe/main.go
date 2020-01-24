@@ -78,15 +78,6 @@ func main() {
 		return
 	}
 
-	dbLabClient, err := client.NewClient(client.Options{
-		Host:              "",
-		VerificationToken: "",
-	}, logrus.New())
-
-	if err != nil {
-		log.Fatal("Provision constuct failed", err)
-	}
-
 	log.Dbg("git: ", opts.DevGitCommitHash, opts.DevGitBranch, opts.DevGitModified)
 
 	version := formatBotVersion(opts.DevGitCommitHash, opts.DevGitBranch,
@@ -112,7 +103,16 @@ func main() {
 		Version: version,
 	}
 
-	var chat = chatapi.NewChat(opts.AccessToken, opts.VerificationToken)
+	chat := chatapi.NewChat(opts.AccessToken, opts.VerificationToken)
+
+	dbLabClient, err := client.NewClient(client.Options{
+		Host:              config.DBLab.URL,
+		VerificationToken: config.DBLab.Token,
+	}, logrus.New())
+
+	if err != nil {
+		log.Fatal("Failed to create a Database Lab client", err)
+	}
 
 	joeBot := bot.NewBot(config, chat, dbLabClient)
 	joeBot.RunServer()

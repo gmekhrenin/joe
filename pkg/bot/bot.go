@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"gitlab.com/postgres-ai/joe/pkg/provision"
 	"html"
 	"net/http"
 	"regexp"
@@ -550,7 +551,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		runMsg(sMsg)
 
-		pwd, err := password.Generate(12, 4, 4, false, true)
+		pwd, err := password.Generate(16, 4, 4, false, true)
 		if err != nil {
 			failMsg(sMsg, err.Error())
 			return
@@ -573,6 +574,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 		user.Session.Clone = clone
+		user.Session.Clone.Db.Password = pwd // TODO(akartasov): Should keep a password?
 
 		if b.Config.HistoryEnabled {
 			sId, err := b.ApiCreateSession(user.ChatUser.ID, user.ChatUser.Name, ch)
@@ -895,17 +897,13 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		// TODO(akartasov): Keep psql for psql commands available to users - runPsqlStrict
 		//  OR
 		//  Use direct connection instead psql.
-		err := errors.New("an unavailable command for now")
-		log.Err(psqlCmd)
-		log.Err(err)
-		//cmd, err := b.Prov.RunPsql(user.Session.Provision, psqlCmd)
-		//if err != nil {
-		//	log.Err(err)
-		//	failMsg(msg, err.Error())
-		//	b.failApiCmd(apiCmd, err.Error())
-		//	return
-		//}
-		cmd := ""
+		cmd, err := provision.RunPsql(*user.Session.Clone.Db, psqlCmd)
+		if err != nil {
+			log.Err(err)
+			failMsg(msg, err.Error())
+			b.failApiCmd(apiCmd, err.Error())
+			return
+		}
 
 		apiCmd.Response = cmd
 

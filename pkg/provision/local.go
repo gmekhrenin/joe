@@ -4,6 +4,8 @@
 
 package provision
 
+import "gitlab.com/postgres-ai/database-lab/pkg/models"
+
 const (
 	PORT = 5432
 )
@@ -88,9 +90,9 @@ type provisionLocal struct {
 //	return fmt.Errorf("Unsupported in `local` mode.")
 //}
 
-func (j *provisionLocal) RunPsql(session *Session, command string) (string, error) {
-	pgConf := j.getPgConfig(session.Name, session.Port)
-	return runPsqlStrict(j.runner, command, pgConf)
+func RunPsql(database models.Database, command string) (string, error) {
+	runner := NewLocalRunner()
+	return runPsqlStrict(runner, command, database)
 }
 
 // Private methods.
