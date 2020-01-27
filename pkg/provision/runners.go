@@ -93,8 +93,6 @@ func (r *SQLRunner) Run(commandParam string) (string, error) {
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
 
-	log.Dbg(cmd.String())
-
 	// Psql with the file option returns error reponse to stderr with
 	// success exit code. In that case err will be nil, but we need
 	// to treat the case as error and read proper output.

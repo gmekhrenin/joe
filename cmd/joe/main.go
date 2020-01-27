@@ -19,10 +19,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"gitlab.com/postgres-ai/database-lab/client"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
+	"gopkg.in/yaml.v2"
+
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
+	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gopkg.in/yaml.v2"
 )
 
 var opts struct {
@@ -34,7 +36,7 @@ var opts struct {
 	DBLabURL   string `long:"dblab-url" description:"Database Lab URL" env:"DBLAB_URL" default:"localhost"`
 	DBLabToken string `long:"dblab-token" description:"Database Lab token" env:"DBLAB_TOKEN" default:"xxx"`
 
-	DBName string `short:"d" long:"dbname" description:"database name to connect to" env:"DBLAB_DBNAME" default:"db"`
+	DBName  string `short:"d" long:"dbname" description:"database name to connect to" env:"DBLAB_DBNAME" default:"db"`
 	SSLMode string `long:"ssl-mode" description:"ssl mode provides different protection levels of a Database Lab connection." env:"DBLAB_SSL_MODE" default:"require"`
 
 	// HTTP Server.
@@ -90,14 +92,14 @@ func main() {
 	version := formatBotVersion(opts.DevGitCommitHash, opts.DevGitBranch,
 		opts.DevGitModified)
 
-	config := bot.Config{
+	botCfg := config.Bot{
 		Port:          opts.ServerPort,
 		Explain:       explainConfig,
 		QuotaLimit:    opts.QuotaLimit,
 		QuotaInterval: opts.QuotaInterval,
 		IdleInterval:  opts.IdleInterval,
 
-		DBLab: bot.DBLabInstance{
+		DBLab: config.DBLabInstance{
 			URL:     opts.DBLabURL,
 			Token:   opts.DBLabToken,
 			DBName:  opts.DBName,
@@ -115,15 +117,15 @@ func main() {
 	chat := chatapi.NewChat(opts.AccessToken, opts.VerificationToken)
 
 	dbLabClient, err := client.NewClient(client.Options{
-		Host:              config.DBLab.URL,
-		VerificationToken: config.DBLab.Token,
+		Host:              botCfg.DBLab.URL,
+		VerificationToken: botCfg.DBLab.Token,
 	}, logrus.New())
 
 	if err != nil {
 		log.Fatal("Failed to create a Database Lab client", err)
 	}
 
-	joeBot := bot.NewBot(config, chat, dbLabClient)
+	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
 	joeBot.RunServer()
 }
 
