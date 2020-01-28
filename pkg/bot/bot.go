@@ -6,25 +6,37 @@ package bot
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
-
-	"../chatapi"
-	"../log"
-	"../pgexplain"
-	"../provision"
-	"../util"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/hako/durafmt"
 	_ "github.com/lib/pq"
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
+	"github.com/pkg/errors"
+	"github.com/rs/xid"
+	"github.com/sethvargo/go-password/password"
+
+	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
+	"gitlab.com/postgres-ai/database-lab/pkg/models"
+
+	"gitlab.com/postgres-ai/joe/pkg/bot/api"
+	"gitlab.com/postgres-ai/joe/pkg/bot/command"
+	"gitlab.com/postgres-ai/joe/pkg/chatapi"
+	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/dblab"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/util"
+	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
 const COMMAND_EXPLAIN = "explain"
@@ -93,7 +105,6 @@ var supportedSubtypes = []string{
 }
 
 const QUERY_PREVIEW_SIZE = 400
-const PLAN_SIZE = 400
 
 const IDLE_TICK_DURATION = 120 * time.Minute
 
@@ -118,21 +129,15 @@ const MSG_SESSION_FOREWORD_TPL = "Starting new session...\n\n" +
 
 var MSG_SESSION_FOREWORD = getForeword(IDLE_TICK_DURATION)
 
-const MSG_EXEC_OPTION_REQ = "Use `exec` to run query, e.g. `exec drop index some_index_name`"
-const MSG_EXPLAIN_OPTION_REQ = "Use `explain` to see the query's plan, e.g. `explain select 1`"
-const MSG_SNAPSHOT_OPTION_REQ = "Use `snapshot` to create a snapshot, e.g. `snapshot state_name`"
-
 const RCTN_RUNNING = "hourglass_flowing_sand"
 const RCTN_OK = "white_check_mark"
-const RCTN_ERROR = "x"
 
 const SEPARATOR_ELLIPSIS = "\n[...SKIP...]\n"
-const SEPARATOR_PLAN = "\n[...SKIP...]\n"
-
-const CUT_TEXT = "_(The text in the preview above has been cut)_"
 
 const HINT_EXPLAIN = "Consider using `explain` command for DML statements. See `help` for details."
 const HINT_EXEC = "Consider using `exec` command for DDL statements. See `help` for details."
+
+const dbLabUserNamePrefix = "dblab_"
 
 var hintExplainDmlWords = []string{"insert", "select", "update", "delete", "with"}
 var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
@@ -147,7 +152,7 @@ type Config struct {
 	QuotaInterval uint // Seconds.
 	IdleInterval  uint // Seconds.
 
-	DbName string
+	DBLab DBLabInstance
 
 	ApiUrl         string
 	ApiToken       string
@@ -157,10 +162,18 @@ type Config struct {
 	Version string
 }
 
+// DBLabInstance contains Database Lab config.
+type DBLabInstance struct {
+	URL     string
+	Token   string
+	DBName  string // TODO(akartasov): Make a dynamically used name.
+	SSLMode string
+}
+
 type Bot struct {
-	Config Config
+	Config config.Bot
 	Chat   *chatapi.Chat
-	Prov   provision.Provision
+	DBLab  *client.Client
 	Users  map[string]*User // Slack UID -> User.
 }
 
@@ -190,29 +203,29 @@ type UserSession struct {
 
 	ChannelIds []string
 
-	Provision *provision.Session
+	Clone *models.Clone
 }
 
-func NewBot(config Config, chat *chatapi.Chat, prov provision.Provision) *Bot {
+func NewBot(cfg config.Bot, chat *chatapi.Chat, dbLab *client.Client) *Bot {
 	bot := Bot{
-		Config: config,
+		Config: cfg,
 		Chat:   chat,
-		Prov:   prov,
+		DBLab:  dbLab,
 		Users:  make(map[string]*User),
 	}
 	return &bot
 }
 
-func NewUser(chatUser *slack.User, config Config) *User {
+func NewUser(chatUser *slack.User, cfg config.Bot) *User {
 	user := User{
 		ChatUser: chatUser,
 		Session: UserSession{
 			QuotaTs:       time.Now(),
 			QuotaCount:    0,
-			QuotaLimit:    config.QuotaLimit,
-			QuotaInterval: config.QuotaInterval,
+			QuotaLimit:    cfg.QuotaLimit,
+			QuotaInterval: cfg.QuotaInterval,
 			LastActionTs:  time.Now(),
-			IdleInterval:  config.IdleInterval,
+			IdleInterval:  cfg.IdleInterval,
 		},
 	}
 
@@ -228,7 +241,7 @@ func (b *Bot) stopIdleSessions() error {
 		}
 
 		s := u.Session
-		if s.Provision == nil {
+		if s.Clone == nil {
 			continue
 		}
 
@@ -283,16 +296,14 @@ func (b *Bot) stopIdleSessions() error {
 
 func (b *Bot) stopAllSessions() error {
 	for _, u := range b.Users {
-		if u == nil {
+		if u == nil || u.Session.Clone == nil {
 			continue
 		}
 
-		s := u.Session
-		if s.Provision == nil {
+		if err := b.stopSession(u); err != nil {
+			log.Errf("Failed to stop session %q: %v\n", u.Session.Clone.ID, err)
 			continue
 		}
-
-		b.stopSession(u)
 	}
 
 	return nil
@@ -301,15 +312,12 @@ func (b *Bot) stopAllSessions() error {
 func (b *Bot) stopSession(u *User) error {
 	log.Dbg("Stopping session...")
 
-	err := b.Prov.StopSession(u.Session.Provision)
-
-	u.Session.Provision = nil
-	u.Session.PlatformSessionId = ""
-
-	if err != nil {
-		log.Err(err)
-		return err
+	if err := b.DBLab.DestroyClone(context.TODO(), u.Session.Clone.ID); err != nil {
+		return errors.Wrap(err, "failed to destroy clone")
 	}
+
+	u.Session.Clone = nil
+	u.Session.PlatformSessionId = ""
 
 	return nil
 }
@@ -403,8 +411,6 @@ func (b *Bot) processAppMentionEvent(ev *slackevents.AppMentionEvent) {
 func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	var err error
 
-	explainConfig := b.Config.Explain
-
 	// Skip messages sent by bots.
 	if ev.User == "" || ev.BotID != "" {
 		log.Dbg("Message filtered: Bot")
@@ -436,7 +442,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 			msg, _ := b.Chat.NewMessage(ch)
 			msg.Publish(" ")
-			failMsg(msg, err.Error())
+			msg.Fail(err.Error())
 			return
 		}
 
@@ -461,7 +467,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 			msg, _ := b.Chat.NewMessage(ch)
 			msg.Publish(" ")
-			failMsg(msg, err.Error())
+			msg.Fail(err.Error())
 			return
 		}
 
@@ -478,16 +484,16 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	// Message: "command query(optional)".
 	parts := strings.SplitN(message, " ", 2)
-	command := strings.ToLower(parts[0])
+	receivedCommand := strings.ToLower(parts[0])
 
 	query := ""
 	if len(parts) > 1 {
 		query = parts[1]
 	}
 
-	b.showBotHints(ev, command, query)
+	b.showBotHints(ev, receivedCommand, query)
 
-	if !util.Contains(supportedCommands, command) {
+	if !util.Contains(supportedCommands, receivedCommand) {
 		log.Dbg("Message filtered: Not a command")
 		return
 	}
@@ -497,34 +503,34 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		log.Err("Quota: ", err)
 		msg, _ := b.Chat.NewMessage(ch)
 		msg.Publish(" ")
-		failMsg(msg, err.Error())
+		msg.Fail(err.Error())
 		return
 	}
 
 	// We want to save message height space for more valuable info.
 	queryPreview := strings.ReplaceAll(query, "\n", " ")
 	queryPreview = strings.ReplaceAll(queryPreview, "\t", " ")
-	queryPreview, _ = cutText(queryPreview, QUERY_PREVIEW_SIZE, SEPARATOR_ELLIPSIS)
+	queryPreview, _ = text.CutText(queryPreview, QUERY_PREVIEW_SIZE, SEPARATOR_ELLIPSIS)
 
 	audit, err := json.Marshal(Audit{
 		Id:       user.ChatUser.ID,
 		Name:     user.ChatUser.Name,
 		RealName: user.ChatUser.RealName,
-		Command:  command,
+		Command:  receivedCommand,
 		Query:    query,
 	})
 	if err != nil {
 		msg, _ := b.Chat.NewMessage(ch)
 		msg.Publish(" ")
-		failMsg(msg, err.Error())
+		msg.Fail(err.Error())
 		return
 	}
 	log.Audit(string(audit))
 
-	msgText := fmt.Sprintf("```%s %s```\n", command, queryPreview)
+	msgText := fmt.Sprintf("```%s %s```\n", receivedCommand, queryPreview)
 
 	// Show `help` command without initializing of a session.
-	if command == COMMAND_HELP {
+	if receivedCommand == COMMAND_HELP {
 		msgText = appendHelp(msgText, b.Config.Version)
 		msgText = appendSessionId(msgText, user)
 
@@ -538,62 +544,87 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	if user.Session.Provision == nil {
+	if user.Session.Clone == nil {
 		sMsg, _ := b.Chat.NewMessage(ch)
 		sMsg.Publish(MSG_SESSION_FOREWORD)
 
 		runMsg(sMsg)
 
-		session, err := b.Prov.StartSession()
+		pwd, err := password.Generate(16, 4, 4, false, true)
 		if err != nil {
-			switch err.(type) {
-			case provision.NoRoomError:
-				err = b.stopIdleSessions()
-				if err != nil {
-					failMsg(sMsg, err.Error())
-					return
-				}
-
-				session, err = b.Prov.StartSession()
-				if err != nil {
-					failMsg(sMsg, err.Error())
-					return
-				}
-			default:
-				failMsg(sMsg, err.Error())
-				return
-			}
+			sMsg.Fail(err.Error())
+			return
 		}
 
-		user.Session.Provision = session
+		clientRequest := client.CreateRequest{
+			Name:      xid.New().String(),
+			Project:   user.Session.PlatformSessionId,
+			Protected: false,
+			DB: &client.DatabaseRequest{
+				Username: dbLabUserNamePrefix + user.ChatUser.Name,
+				Password: pwd,
+			},
+		}
+
+		clone, err := b.DBLab.CreateClone(context.TODO(), clientRequest)
+		if err != nil {
+			sMsg.Fail(err.Error())
+			return
+		}
+
+		time.Sleep(3 * time.Second) // TODO(akartasov): Make synchronous API request.
+		clone, err = b.DBLab.GetClone(context.TODO(), clone.ID)
+		if err != nil {
+			sMsg.Fail(err.Error())
+			return
+		}
+
+		user.Session.Clone = clone
+		user.Session.Clone.Db.Password = pwd
 
 		if b.Config.HistoryEnabled {
 			sId, err := b.ApiCreateSession(user.ChatUser.ID, user.ChatUser.Name, ch)
 			if err != nil {
 				log.Err("API: Create platform session:", err)
+
 				b.stopSession(user)
-				failMsg(sMsg, err.Error())
+				sMsg.Fail(err.Error())
 				return
 			}
 
 			user.Session.PlatformSessionId = sId
 		}
 
-		sId := session.Id
-		if len(user.Session.PlatformSessionId) > 0 {
+		sId := clone.ID
+		if user.Session.PlatformSessionId != "" {
 			sId = user.Session.PlatformSessionId
 		}
 
 		sMsg.Append(fmt.Sprintf("Session started: `%s`", sId))
 		okMsg(sMsg)
 	}
+
 	msgText = appendSessionId(msgText, user)
 
-	connStr := user.Session.Provision.GetConnStr(b.Config.DbName)
+	dbLabClone := dblab.Clone{
+		Name:     b.Config.DBLab.DBName,
+		Host:     user.Session.Clone.Db.Host,
+		Port:     user.Session.Clone.Db.Port,
+		Username: user.Session.Clone.Db.Username,
+		Password: user.Session.Clone.Db.Password,
+		SSLMode:  b.Config.DBLab.SSLMode,
+	}
+
+	connStr := dbLabClone.ConnectionString()
+	log.Dbg(connStr)
 
 	msg, err := b.Chat.NewMessage(ch)
-	err = msg.Publish(msgText)
 	if err != nil {
+		log.Err("Bot: Cannot create a message", err)
+		return
+	}
+
+	if err := msg.Publish(msgText); err != nil {
 		// TODO(anatoly): Retry.
 		log.Err("Bot: Cannot publish a message", err)
 		return
@@ -601,259 +632,40 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	runMsg(msg)
 
-	apiCmd := &ApiCommand{
-		SessionId: user.Session.PlatformSessionId,
-		Command:   command,
-		Query:     query,
-		SlackTs:   ev.TimeStamp,
-		Error:     "",
+	apiCmd := &api.ApiCommand{
+		AccessToken: b.Config.ApiToken,
+		ApiURL:      b.Config.ApiUrl,
+		SessionId:   user.Session.PlatformSessionId,
+		Command:     receivedCommand,
+		Query:       query,
+		SlackTs:     ev.TimeStamp,
+		Error:       "",
 	}
 
+	// TODO(akartasov): Error processing.
 	switch {
-	case command == COMMAND_EXPLAIN:
-		var detailsText string
-		var trnd bool
+	case receivedCommand == COMMAND_EXPLAIN:
+		err = command.Explain(b.Chat, apiCmd, msg, b.Config, ch, connStr)
 
-		if query == "" {
-			failMsg(msg, MSG_EXPLAIN_OPTION_REQ)
-			b.failApiCmd(apiCmd, MSG_EXPLAIN_OPTION_REQ)
-			return
-		}
+	case receivedCommand == COMMAND_EXEC:
+		err = command.Exec(apiCmd, msg, connStr)
 
-		// Explain request and show.
-		var res, err = dbExplain(connStr, query)
-		if err != nil {
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
+	case receivedCommand == COMMAND_SNAPSHOT:
+		err = command.Snapshot(apiCmd)
 
-		apiCmd.PlanText = res
-		planPreview, trnd := cutText(res, PLAN_SIZE, SEPARATOR_PLAN)
+	case receivedCommand == COMMAND_RESET:
+		err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
 
-		msgInitText := msg.Text
-
-		err = msg.Append(fmt.Sprintf("*Plan:*\n```%s```", planPreview))
-		if err != nil {
-			log.Err("Show plan: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		filePlanWoExec, err := b.Chat.UploadFile("plan-wo-execution-text", res, ch, msg.Timestamp)
-		if err != nil {
-			log.Err("File upload failed:", err)
-			failMsg(msg, err.Error())
-			return
-		}
-
-		detailsText = ""
-		if trnd {
-			detailsText = " " + CUT_TEXT
-		}
-
-		err = msg.Append(fmt.Sprintf("<%s|Full plan (w/o execution)>%s", filePlanWoExec.Permalink, detailsText))
-		if err != nil {
-			log.Err("File: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		// Explain analyze request and processing.
-		res, err = dbExplainAnalyze(connStr, query)
-		if err != nil {
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		apiCmd.PlanExecJson = res
-
-		// Visualization.
-		explain, err := pgexplain.NewExplain(res, explainConfig)
-		if err != nil {
-			log.Err("Explain parsing: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		vis := explain.RenderPlanText()
-		apiCmd.PlanExecText = vis
-
-		planExecPreview, trnd := cutText(vis, PLAN_SIZE, SEPARATOR_PLAN)
-
-		err = msg.Replace(msgInitText + chatapi.CHAT_APPEND_SEPARATOR +
-			fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
-		if err != nil {
-			log.Err("Show the plan with execution:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		_, err = b.Chat.UploadFile("plan-json", res, ch, msg.Timestamp)
-		if err != nil {
-			log.Err("File upload failed:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		filePlan, err := b.Chat.UploadFile("plan-text", vis, ch, msg.Timestamp)
-		if err != nil {
-			log.Err("File upload failed:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		detailsText = ""
-		if trnd {
-			detailsText = " " + CUT_TEXT
-		}
-
-		err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s \n"+
-			"_Other artifacts are provided in the thread_",
-			filePlan.Permalink, detailsText))
-		if err != nil {
-			log.Err("File: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		// Recommendations.
-		tips, err := explain.GetTips()
-		if err != nil {
-			log.Err("Recommendations: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		recommends := ""
-		if len(tips) == 0 {
-			recommends += ":white_check_mark: Looks good"
-		} else {
-			for _, tip := range tips {
-				recommends += fmt.Sprintf(
-					":exclamation: %s – %s <%s|Show details>\n", tip.Name,
-					tip.Description, tip.DetailsUrl)
-			}
-		}
-
-		apiCmd.Recommendations = recommends
-
-		err = msg.Append("*Recommendations:*\n" + recommends)
-		if err != nil {
-			log.Err("Show recommendations: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		// Summary.
-		stats := explain.RenderStats()
-		apiCmd.Stats = stats
-
-		err = msg.Append(fmt.Sprintf("*Summary:*\n```%s```", stats))
-		if err != nil {
-			log.Err("Show summary: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-	case command == COMMAND_EXEC:
-		if query == "" {
-			failMsg(msg, MSG_EXEC_OPTION_REQ)
-			b.failApiCmd(apiCmd, MSG_EXEC_OPTION_REQ)
-			return
-		}
-
-		start := time.Now()
-		err = dbExec(connStr, query)
-		elapsed := time.Since(start)
-		if err != nil {
-			log.Err("Exec:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		duration := util.DurationToString(elapsed)
-		result := fmt.Sprintf("The query has been executed. Duration: %s", duration)
-		apiCmd.Response = result
-
-		err = msg.Append(result)
-		if err != nil {
-			log.Err("Exec:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-	case command == COMMAND_SNAPSHOT:
-		if query == "" {
-			failMsg(msg, MSG_SNAPSHOT_OPTION_REQ)
-			b.failApiCmd(apiCmd, MSG_SNAPSHOT_OPTION_REQ)
-			return
-		}
-
-		err = b.Prov.CreateSnapshot(query)
-		if err != nil {
-			log.Err("Snapshot: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-	case command == COMMAND_RESET:
-		msg.Append("Resetting the state of the database...")
-
-		// TODO(anatoly): "zfs rollback" deletes newer snapshots. Users will be able
-		// to jump across snapshots if we solve it.
-		err = b.Prov.ResetSession(user.Session.Provision)
-		if err != nil {
-			log.Err("Reset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		result := "The state of the database has been reset."
-		apiCmd.Response = result
-
-		err = msg.Append(result)
-		if err != nil {
-			log.Err("Reset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-	case command == COMMAND_HARDRESET:
+	case receivedCommand == COMMAND_HARDRESET:
 		log.Msg("Reinitilizating provision")
 		msg.Append("Reinitilizating DB provision, " +
 			"it may take a couple of minutes...\n" +
 			"If you want to reset the state of the database use `reset` command.")
 
-		err = b.Prov.Reinit()
-		if err != nil {
+		if err := b.stopAllSessions(); err != nil {
 			log.Err("Hardreset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		err = b.stopAllSessions()
-		if err != nil {
-			log.Err("Hardreset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
+			msg.Fail(err.Error())
+			apiCmd.Fail(err.Error())
 			return
 		}
 
@@ -862,74 +674,28 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		apiCmd.Response = result
 
-		err = msg.Append(result)
-		if err != nil {
+		if err = msg.Append(result); err != nil {
 			log.Err("Hardreset:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
+			msg.Fail(err.Error())
+			apiCmd.Fail(err.Error())
 			return
 		}
 
-	case util.Contains(allowedPsqlCommands, command):
-		// See provision.runPsqlStrict for more comments.
-		if strings.ContainsAny(query, "\n;\\ ") {
-			err = fmt.Errorf("Query should not contain semicolons, " +
-				"new lines, spaces, and excess backslashes.")
-			log.Err(err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
+	case util.Contains(allowedPsqlCommands, receivedCommand):
+		err = command.PSQL(apiCmd, msg, b.Chat, dbLabClone, ch)
+	}
 
-		psqlCmd := command + " " + query
-
-		cmd, err := b.Prov.RunPsql(user.Session.Provision, psqlCmd)
-		if err != nil {
-			log.Err(err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		apiCmd.Response = cmd
-
-		cmdPreview, trnd := cutText(cmd, PLAN_SIZE, SEPARATOR_PLAN)
-
-		err = msg.Append(fmt.Sprintf("*Command output:*\n```%s```", cmdPreview))
-		if err != nil {
-			log.Err("Show psql output:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		fileCmd, err := b.Chat.UploadFile("command", cmd, ch, msg.Timestamp)
-		if err != nil {
-			log.Err("File upload failed:", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
-
-		detailsText := ""
-		if trnd {
-			detailsText = " " + CUT_TEXT
-		}
-
-		err = msg.Append(fmt.Sprintf("<%s|Full command output>%s\n", fileCmd.Permalink, detailsText))
-		if err != nil {
-			log.Err("File: ", err)
-			failMsg(msg, err.Error())
-			b.failApiCmd(apiCmd, err.Error())
-			return
-		}
+	if err != nil {
+		msg.Fail(err.Error())
+		apiCmd.Fail(err.Error())
+		return
 	}
 
 	if b.Config.HistoryEnabled {
-		_, err := b.ApiPostCommand(apiCmd)
+		_, err := apiCmd.Post()
 		if err != nil {
 			log.Err(err)
-			failMsg(msg, err.Error())
+			msg.Fail(err.Error())
 			return
 		}
 	}
@@ -937,14 +703,53 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	okMsg(msg)
 }
 
+func (b *Bot) ApiCreateSession(uid string, username string, channel string) (string, error) {
+	log.Dbg("API: Create session")
+
+	reqData, err := json.Marshal(&api.ApiSession{
+		ProjectName:   b.Config.ApiProject,
+		AccessToken:   b.Config.ApiToken,
+		SlackUid:      uid,
+		SlackUsername: username,
+		SlackChannel:  channel,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := http.Post(b.Config.ApiUrl+"/rpc/joe_session_create",
+		"application/json", bytes.NewBuffer(reqData))
+	if err != nil {
+		return "", err
+	}
+
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	respData := api.ApiCreateSessionResp{}
+	err = json.Unmarshal(bodyBytes, &respData)
+	if err != nil {
+		return "", err
+	}
+
+	if len(respData.Code) > 0 || len(respData.Message) > 0 {
+		return "", fmt.Errorf("Error: %v", respData)
+	}
+
+	log.Dbg("API: Create session success", respData.SessionId)
+	return fmt.Sprintf("%d", respData.SessionId), nil
+}
+
 func appendSessionId(text string, u *User) string {
 	s := "No session\n"
 
-	if u != nil && u.Session.Provision != nil && len(u.Session.Provision.Id) > 0 {
-		sessionId := u.Session.Provision.Id
+	if u != nil && u.Session.Clone != nil && u.Session.Clone.ID != "" {
+		sessionId := u.Session.Clone.ID
 
 		// Use session ID from platform if it's defined.
-		if len(u.Session.PlatformSessionId) > 0 {
+		if u.Session.PlatformSessionId != "" {
 			sessionId = u.Session.PlatformSessionId
 		}
 
@@ -970,26 +775,6 @@ func okMsg(msg *chatapi.Message) {
 	err := msg.ChangeReaction(RCTN_OK)
 	if err != nil {
 		log.Err(err)
-	}
-}
-
-func failMsg(msg *chatapi.Message, text string) {
-	err := msg.Append(fmt.Sprintf("ERROR: %s", text))
-	if err != nil {
-		log.Err(err)
-	}
-
-	err = msg.ChangeReaction(RCTN_ERROR)
-	if err != nil {
-		log.Err(err)
-	}
-}
-
-func (b *Bot) failApiCmd(apiCmd *ApiCommand, text string) {
-	apiCmd.Error = text
-	_, err := b.ApiPostCommand(apiCmd)
-	if err != nil {
-		log.Err("failApiCmd:", err)
 	}
 }
 
@@ -1056,17 +841,6 @@ func (u *User) requestQuota() error {
 	u.Session.QuotaCount = 1
 	u.Session.QuotaTs = time.Now()
 	return nil
-}
-
-// Cuts length of a text if it exceeds specified size. Specifies was text cut or not.
-func cutText(text string, size int, separator string) (string, bool) {
-	if len(text) > size {
-		size -= len(separator)
-		res := text[0:size] + separator
-		return res, true
-	}
-
-	return text, false
 }
 
 func getForeword(idleDuration time.Duration) string {

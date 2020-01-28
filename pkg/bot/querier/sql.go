@@ -2,26 +2,27 @@
 2019 © Postgres.ai
 */
 
-package bot
+package querier
 
 import (
-	"../log"
 	"database/sql"
+
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 )
 
 const QUERY_EXPLAIN = "EXPLAIN (FORMAT TEXT) "
 const QUERY_EXPLAIN_ANALYZE = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 
-func dbExec(connStr string, query string) error {
+func DBExec(connStr string, query string) error {
 	_, err := runQuery(connStr, query, true)
 	return err
 }
 
-func dbExplain(connStr string, query string) (string, error) {
+func DBExplain(connStr string, query string) (string, error) {
 	return runQuery(connStr, QUERY_EXPLAIN+query, false)
 }
 
-func dbExplainAnalyze(connStr string, query string) (string, error) {
+func DBExplainAnalyze(connStr string, query string) (string, error) {
 	return runQuery(connStr, QUERY_EXPLAIN_ANALYZE+query, false)
 }
 
