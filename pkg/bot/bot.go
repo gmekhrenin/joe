@@ -596,7 +596,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			user.Session.PlatformSessionId = sId
 		}
 
-		// clone ID
 		sId := clone.ID
 		if user.Session.PlatformSessionId != "" {
 			sId = user.Session.PlatformSessionId
