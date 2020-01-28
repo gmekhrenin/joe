@@ -566,7 +566,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			},
 		}
 
-		//session, err := b.Prov.StartSession()
 		clone, err := b.DBLab.CreateClone(context.TODO(), clientRequest)
 		if err != nil {
 			sMsg.Fail(err.Error())
