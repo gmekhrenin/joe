@@ -580,7 +580,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		}
 
 		user.Session.Clone = clone
-		user.Session.Clone.Db.Password = pwd // TODO(akartasov): Should keep a password?
+		user.Session.Clone.Db.Password = pwd
 
 		if b.Config.HistoryEnabled {
 			sId, err := b.ApiCreateSession(user.ChatUser.ID, user.ChatUser.Name, ch)
