@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"../log"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
@@ -24,6 +24,8 @@ const CHAT_APPEND_SEPARATOR = "\n\n"
 const ERROR_NOT_PUBLISHED = "Message not published yet"
 
 const CONTENT_TYPE_TEXT = "text/plain"
+
+const RCTN_ERROR = "x"
 
 type Chat struct {
 	Api               *slack.Client
@@ -244,6 +246,18 @@ func (m *Message) isPublished() bool {
 	}
 
 	return true
+}
+
+func (m *Message) Fail(text string) {
+	err := m.Append(fmt.Sprintf("ERROR: %s", text))
+	if err != nil {
+		log.Err(err)
+	}
+
+	err = m.ChangeReaction(RCTN_ERROR)
+	if err != nil {
+		log.Err(err)
+	}
 }
 
 func (c *Chat) GetUserInfo(id string) (*slack.User, error) {
