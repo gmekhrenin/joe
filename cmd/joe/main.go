@@ -17,7 +17,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
-	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gopkg.in/yaml.v2"
 
@@ -116,7 +116,7 @@ func main() {
 
 	chat := chatapi.NewChat(opts.AccessToken, opts.VerificationToken)
 
-	dbLabClient, err := client.NewClient(client.Options{
+	dbLabClient, err := dblabapi.NewClient(dblabapi.Options{
 		Host:              botCfg.DBLab.URL,
 		VerificationToken: botCfg.DBLab.Token,
 	}, logrus.New())

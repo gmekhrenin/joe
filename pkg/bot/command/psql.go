@@ -13,24 +13,21 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
-	"gitlab.com/postgres-ai/joe/pkg/dblab"
-	"gitlab.com/postgres-ai/joe/pkg/provision"
+	"gitlab.com/postgres-ai/joe/pkg/transmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-func PSQL(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, dbLabClone dblab.Clone, ch string) error {
-	// See provision.runPsqlStrict for more comments.
+func Transmit(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, runner transmission.Runner, ch string) error {
+	// See transmission.prepareCommandParam for more comments.
 	if strings.ContainsAny(apiCmd.Query, "\n;\\ ") {
 		err := errors.New("query should not contain semicolons, new lines, spaces, and excess backslashes")
 		log.Err(err)
 		return err
 	}
 
-	psqlCmd := apiCmd.Command + " " + apiCmd.Query
+	transmissionCmd := apiCmd.Command + " " + apiCmd.Query
 
-	// TODO(akartasov): Keep psql for psql commands available to users - runPsqlStrict
-	runner := provision.NewSQLRunner(dbLabClone, provision.LogsEnabledDefault)
-	cmd, err := provision.RunPsqlStrict(runner, psqlCmd)
+	cmd, err := runner.Run(transmissionCmd)
 	if err != nil {
 		log.Err(err)
 		return err
@@ -41,7 +38,7 @@ func PSQL(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, dbLa
 	cmdPreview, trnd := text.CutText(cmd, PlanSize, SeparatorPlan)
 
 	if err = msg.Append(fmt.Sprintf("*Command output:*\n```%s```", cmdPreview)); err != nil {
-		log.Err("Show psql output:", err)
+		log.Err("Show command output:", err)
 		return err
 	}
 

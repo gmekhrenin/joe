@@ -7,14 +7,14 @@ package command
 import (
 	"context"
 
-	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 )
 
-func ResetSession(ctx context.Context, apiCmd *api.ApiCommand, msg *chatapi.Message, dbLab *client.Client, cloneID string) error {
+func ResetSession(ctx context.Context, apiCmd *api.ApiCommand, msg *chatapi.Message, dbLab *dblabapi.Client, cloneID string) error {
 	msg.Append("Resetting the state of the database...")
 
 	// TODO(anatoly): "zfs rollback" deletes newer snapshots. Users will be able
