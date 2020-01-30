@@ -25,7 +25,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/sethvargo/go-password/password"
 
-	"gitlab.com/postgres-ai/database-lab/client"
+	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 
@@ -35,6 +35,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -173,7 +174,7 @@ type DBLabInstance struct {
 type Bot struct {
 	Config config.Bot
 	Chat   *chatapi.Chat
-	DBLab  *client.Client
+	DBLab  *dblabapi.Client
 	Users  map[string]*User // Slack UID -> User.
 }
 
@@ -206,7 +207,7 @@ type UserSession struct {
 	Clone *models.Clone
 }
 
-func NewBot(cfg config.Bot, chat *chatapi.Chat, dbLab *client.Client) *Bot {
+func NewBot(cfg config.Bot, chat *chatapi.Chat, dbLab *dblabapi.Client) *Bot {
 	bot := Bot{
 		Config: cfg,
 		Chat:   chat,
@@ -556,24 +557,17 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			return
 		}
 
-		clientRequest := client.CreateRequest{
+		clientRequest := dblabapi.CreateRequest{
 			Name:      xid.New().String(),
 			Project:   user.Session.PlatformSessionId,
 			Protected: false,
-			DB: &client.DatabaseRequest{
+			DB: &dblabapi.DatabaseRequest{
 				Username: dbLabUserNamePrefix + user.ChatUser.Name,
 				Password: pwd,
 			},
 		}
 
 		clone, err := b.DBLab.CreateClone(context.TODO(), clientRequest)
-		if err != nil {
-			sMsg.Fail(err.Error())
-			return
-		}
-
-		time.Sleep(3 * time.Second) // TODO(akartasov): Make synchronous API request.
-		clone, err = b.DBLab.GetClone(context.TODO(), clone.ID)
 		if err != nil {
 			sMsg.Fail(err.Error())
 			return
@@ -642,7 +636,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		Error:       "",
 	}
 
-	// TODO(akartasov): Error processing.
 	switch {
 	case receivedCommand == COMMAND_EXPLAIN:
 		err = command.Explain(b.Chat, apiCmd, msg, b.Config, ch, connStr)
@@ -650,39 +643,12 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	case receivedCommand == COMMAND_EXEC:
 		err = command.Exec(apiCmd, msg, connStr)
 
-	case receivedCommand == COMMAND_SNAPSHOT:
-		err = command.Snapshot(apiCmd)
-
 	case receivedCommand == COMMAND_RESET:
 		err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
 
-	case receivedCommand == COMMAND_HARDRESET:
-		log.Msg("Reinitilizating provision")
-		msg.Append("Reinitilizating DB provision, " +
-			"it may take a couple of minutes...\n" +
-			"If you want to reset the state of the database use `reset` command.")
-
-		if err := b.stopAllSessions(); err != nil {
-			log.Err("Hardreset:", err)
-			msg.Fail(err.Error())
-			apiCmd.Fail(err.Error())
-			return
-		}
-
-		result := "Provision reinitilized"
-		log.Msg(result, err)
-
-		apiCmd.Response = result
-
-		if err = msg.Append(result); err != nil {
-			log.Err("Hardreset:", err)
-			msg.Fail(err.Error())
-			apiCmd.Fail(err.Error())
-			return
-		}
-
 	case util.Contains(allowedPsqlCommands, receivedCommand):
-		err = command.PSQL(apiCmd, msg, b.Chat, dbLabClone, ch)
+		runner := pgtransmission.NewPgTransmitter(dbLabClone, pgtransmission.LogsEnabledDefault)
+		err = command.Transmit(apiCmd, msg, b.Chat, runner, ch)
 	}
 
 	if err != nil {

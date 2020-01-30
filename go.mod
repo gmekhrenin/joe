@@ -14,7 +14,6 @@ require (
 	github.com/sergi/go-diff v1.1.0
 	github.com/sethvargo/go-password v0.1.3
 	github.com/sirupsen/logrus v1.4.2
-	gitlab.com/postgres-ai/database-lab v0.0.0-20200121164245-853cec75f92d
-	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3 // indirect
+	gitlab.com/postgres-ai/database-lab v0.0.0-20200129135159-e16dfa7a9ffd
 	gopkg.in/yaml.v2 v2.2.7
 )
