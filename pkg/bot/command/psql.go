@@ -17,7 +17,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-func Transmit(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, runner transmission.Runner, ch string) error {
+func Transmit(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, runner transmission.Runner) error {
 	// See transmission.prepareCommandParam for more comments.
 	if strings.ContainsAny(apiCmd.Query, "\n;\\ ") {
 		err := errors.New("query should not contain semicolons, new lines, spaces, and excess backslashes")
@@ -42,7 +42,7 @@ func Transmit(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, 
 		return err
 	}
 
-	fileCmd, err := chat.UploadFile("command", cmd, ch, msg.Timestamp)
+	fileCmd, err := chat.UploadFile("command", cmd, msg.ChannelId, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err

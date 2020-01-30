@@ -18,7 +18,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, botCfg config.Bot, ch, connStr string) error {
+func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, botCfg config.Bot, connStr string) error {
 	var detailsText string
 	var trnd bool
 
@@ -45,7 +45,7 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 		return err
 	}
 
-	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", res, ch, msg.Timestamp)
+	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", res, msg.ChannelId, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		//msg.Fail(err.Error())
@@ -93,13 +93,13 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 		return err
 	}
 
-	_, err = chat.UploadFile("plan-json", res, ch, msg.Timestamp)
+	_, err = chat.UploadFile("plan-json", res, msg.ChannelId, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err
 	}
 
-	filePlan, err := chat.UploadFile("plan-text", vis, ch, msg.Timestamp)
+	filePlan, err := chat.UploadFile("plan-text", vis, msg.ChannelId, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err
