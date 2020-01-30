@@ -2,7 +2,7 @@
 2019 © Postgres.ai
 */
 
-// Package pgtransmission provides command transmission to a Postgres clone.
+// Package pgtransmission provides psql-commands transmission to retrieve meta information from a PostgreSQL clone.
 package pgtransmission
 
 import (
