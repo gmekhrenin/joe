@@ -107,7 +107,7 @@ var supportedSubtypes = []string{
 
 const QUERY_PREVIEW_SIZE = 400
 
-const IdleTickDuration = 120 * time.Minute
+const InactiveCloneCheckInterval = time.Minute
 
 const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, UPDATE or WITH) and generate recommendations\n" +
 	"• `exec` — execute any query (for example, CREATE INDEX)\n" +
@@ -117,8 +117,9 @@ const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, 
 	"• `\\d`, `\\d+`, `\\dt`, `\\dt+`, `\\di`, `\\di+`, `\\l`, `\\l+`, `\\dv`, `\\dv+`, `\\dm`, `\\dm+` — psql meta information commands\n" +
 	"• `help` — this message\n"
 
-const MSG_SESSION_FOREWORD_TPL = "Starting new session...\n\n" +
-	"• Sessions are independent. You will have your own full-sized copy of the database.\n" +
+const MsgSessionStarting = "Starting new session...\n\n"
+
+const MsgSessionForewordTpl = "• Sessions are independent. You will have your own full-sized copy of the database.\n" +
 	"• Feel free to change anything: build and drop indexes, change schema, etc.\n" +
 	"• At any time, use `reset` to re-initialize the database. This will cancel the ongoing queries in your session. Say `help` to see the full list of commands.\n" +
 	"• I will mark my responses with `Session: N`, where `N` is the session number (you will get your number once your session is initialized).\n" +
@@ -127,8 +128,6 @@ const MSG_SESSION_FOREWORD_TPL = "Starting new session...\n\n" +
 	"• The actual timing values may differ from those that production instances have because actual caches in DB Lab are smaller, therefore reading from disks is required more often. " +
 	"However, the number of bytes and pages/buffers involved into query execution are the same as those on a production server.\n" +
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and MRs are welcome: https://gitlab.com/postgres-ai/joe \n"
-
-var MsgSessionForeword = getForeword(IdleTickDuration)
 
 const RCTN_RUNNING = "hourglass_flowing_sand"
 const RCTN_OK = "white_check_mark"
@@ -209,7 +208,7 @@ type UserSession struct {
 	LastActionTs time.Time
 	IdleInterval uint
 
-	ChannelIds []string
+	ChannelIDs []string
 
 	Clone *models.Clone
 }
@@ -233,14 +232,73 @@ func NewUser(chatUser *slack.User, cfg config.Bot) *User {
 			QuotaLimit:    cfg.QuotaLimit,
 			QuotaInterval: cfg.QuotaInterval,
 			LastActionTs:  time.Now(),
-			IdleInterval:  cfg.IdleInterval,
 		},
 	}
 
 	return &user
 }
 
+func (b *Bot) checkIdleSessions(ctx context.Context) error {
+	// TODO(anatoly): List stopped session to channel.
+	channelsToNotify := make(map[string][]string)
+
+	// TODO(akartasov): Fix data races.
+	for _, u := range b.Users {
+		if u == nil || u.Session.Clone == nil {
+			continue
+		}
+
+		minutesAgoSinceLastAction := util.MinutesAgo(u.Session.LastActionTs)
+
+		if minutesAgoSinceLastAction < u.Session.Clone.Metadata.MaxIdleMinutes {
+			continue
+		}
+
+		if b.isActiveSession(ctx, u.Session.Clone.ID) {
+			continue
+		}
+
+		log.Dbg("Session idle: %v %v", u, u.Session)
+
+		u.Session.Clone = nil
+
+		for _, channelID := range u.Session.ChannelIDs {
+			chatUserID := u.ChatUser.ID
+
+			channelsToNotify[channelID] = append(channelsToNotify[channelID], chatUserID)
+		}
+	}
+
+	// Publish message in every channel with a list of users.
+	for channelID, chatUserIDs := range channelsToNotify {
+		if len(chatUserIDs) == 0 {
+			continue
+		}
+
+		formattedUserList := make([]string, 0, len(chatUserIDs))
+		for _, chatUserID := range chatUserIDs {
+			formattedUserList = append(formattedUserList, fmt.Sprintf("<@%s>", chatUserID))
+		}
+
+		msgText := "Stopped idle sessions for: " + strings.Join(formattedUserList, ", ")
+
+		msg, _ := b.Chat.NewMessage(channelID)
+		err := msg.Publish(msgText)
+		if err != nil {
+			log.Err("Bot: Cannot publish a message", err)
+		}
+	}
+
+	return nil
+}
+
 func (b *Bot) RunServer() {
+	// Check idle sessions.
+	_ = util.RunInterval(InactiveCloneCheckInterval, func() {
+		log.Dbg("Check idle sessions")
+		b.checkIdleSessions(context.TODO())
+	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		b.handleEvent(w, r)
 	})
@@ -362,8 +420,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		b.Users[ev.User] = user
 	}
 	user.Session.LastActionTs = time.Now()
-	if !util.Contains(user.Session.ChannelIds, ch) {
-		user.Session.ChannelIds = append(user.Session.ChannelIds, ch)
+	if !util.Contains(user.Session.ChannelIDs, ch) {
+		user.Session.ChannelIDs = append(user.Session.ChannelIDs, ch)
 	}
 
 	message = formatSlackMessage(message)
@@ -465,10 +523,10 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	dbLabClone := dblab.Clone{
 		Name:     b.Config.DBLab.DBName,
-		Host:     user.Session.Clone.Db.Host,
-		Port:     user.Session.Clone.Db.Port,
-		Username: user.Session.Clone.Db.Username,
-		Password: user.Session.Clone.Db.Password,
+		Host:     user.Session.Clone.DB.Host,
+		Port:     user.Session.Clone.DB.Port,
+		Username: user.Session.Clone.DB.Username,
+		Password: user.Session.Clone.DB.Password,
 		SSLMode:  b.Config.DBLab.SSLMode,
 	}
 
@@ -534,15 +592,24 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 // RunSession starts a user session if not exists.
 func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) error {
-	if user.Session.Clone != nil && b.isActiveSession(ctx, user.Session.Clone.ID) {
-		return nil
+	sMsg, _ := b.Chat.NewMessage(channelID)
+
+	messageText := strings.Builder{}
+
+	if user.Session.Clone != nil {
+		if b.isActiveSession(ctx, user.Session.Clone.ID) {
+			return nil
+		}
+
+		messageText.WriteString("Session was closed by Database Lab.\n")
 	}
 
 	// Reset session clone if not active.
 	user.Session.Clone = nil
 
-	sMsg, _ := b.Chat.NewMessage(channelID)
-	sMsg.Publish(MsgSessionForeword)
+	messageText.WriteString(MsgSessionStarting)
+	sMsg.Publish(messageText.String())
+	messageText.Reset()
 
 	runMsg(sMsg)
 
@@ -551,6 +618,8 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 		sMsg.Fail(err.Error())
 		return err
 	}
+
+	sMsg.Append(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes) * time.Minute))
 
 	user.Session.Clone = clone
 
@@ -574,18 +643,20 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 
 // isActiveSession checks if current user session is active.
 func (b *Bot) isActiveSession(ctx context.Context, cloneID string) bool {
-	var err error
-	_, err = b.DBLab.GetClone(ctx, cloneID)
+	clone, err := b.DBLab.GetClone(ctx, cloneID)
 	if err != nil {
 		errModel, ok := errors.Cause(err).(models.Error)
 		if !ok {
 			return false
 		}
 
-		// TODO(akartasov): Use constant from Database Lab.
-		if errModel.Code != "NOT_FOUND" {
+		if errModel.Code != models.ErrCodeNotFound {
 			return false
 		}
+	}
+
+	if clone.Status.Code != models.StatusOK {
+		return false
 	}
 
 	return true
@@ -613,7 +684,7 @@ func (b *Bot) createDBLabClone(user *User) (*models.Clone, error) {
 		return nil, errors.Wrap(err, "failed to create a new clone")
 	}
 
-	clone.Db.Password = pwd
+	clone.DB.Password = pwd
 
 	return clone, nil
 }
@@ -793,5 +864,5 @@ func (u *User) requestQuota() error {
 
 func getForeword(idleDuration time.Duration) string {
 	duration := durafmt.Parse(idleDuration.Round(time.Minute))
-	return fmt.Sprintf(MSG_SESSION_FOREWORD_TPL, duration)
+	return fmt.Sprintf(MsgSessionForewordTpl, duration)
 }

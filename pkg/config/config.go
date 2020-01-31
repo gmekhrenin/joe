@@ -12,7 +12,6 @@ type Bot struct {
 	Explain       pgexplain.ExplainConfig
 	QuotaLimit    uint
 	QuotaInterval uint // Seconds.
-	IdleInterval  uint // Seconds.
 
 	DBLab DBLabInstance
 
