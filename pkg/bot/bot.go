@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -557,25 +558,48 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		Error:       "",
 	}
 
-	switch {
-	case receivedCommand == COMMAND_EXPLAIN:
-		err = command.Explain(b.Chat, apiCmd, msg, b.Config, connStr)
+	const maxRetryCounter = 1
 
-	case receivedCommand == COMMAND_EXEC:
-		err = command.Exec(apiCmd, msg, connStr)
+	// TODO(akartasov): Refactor commands and create retrier.
+	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
+		switch {
+		case receivedCommand == COMMAND_EXPLAIN:
+			err = command.Explain(b.Chat, apiCmd, msg, b.Config, connStr)
 
-	case receivedCommand == COMMAND_RESET:
-		err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
+		case receivedCommand == COMMAND_EXEC:
+			err = command.Exec(apiCmd, msg, connStr)
 
-	case util.Contains(allowedPsqlCommands, receivedCommand):
-		runner := pgtransmission.NewPgTransmitter(dbLabClone, pgtransmission.LogsEnabledDefault)
-		err = command.Transmit(apiCmd, msg, b.Chat, runner)
-	}
+		case receivedCommand == COMMAND_RESET:
+			err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
 
-	if err != nil {
-		msg.Fail(err.Error())
-		apiCmd.Fail(err.Error())
-		return
+		case util.Contains(allowedPsqlCommands, receivedCommand):
+			runner := pgtransmission.NewPgTransmitter(dbLabClone, pgtransmission.LogsEnabledDefault)
+			err = command.Transmit(apiCmd, msg, b.Chat, runner)
+		}
+
+		if err != nil {
+			if _, ok := err.(*net.OpError); ok {
+				fmt.Println("postgres failed - try reconnect")
+
+				if iteration != maxRetryCounter {
+					if !b.isActiveSession(context.TODO(), user.Session.Clone.ID) {
+						msg.Append("Session was closed by Database Lab.\n")
+						user.Session.Clone = nil
+
+						if err := b.RunSession(context.TODO(), user, msg.ChannelID); err != nil {
+							log.Err(err)
+							return
+						}
+
+						continue
+					}
+				}
+			}
+
+			msg.Fail(err.Error())
+			apiCmd.Fail(err.Error())
+			return
+		}
 	}
 
 	if b.Config.HistoryEnabled {
@@ -597,11 +621,7 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 	messageText := strings.Builder{}
 
 	if user.Session.Clone != nil {
-		if b.isActiveSession(ctx, user.Session.Clone.ID) {
-			return nil
-		}
-
-		messageText.WriteString("Session was closed by Database Lab.\n")
+		return nil
 	}
 
 	// Reset session clone if not active.
@@ -613,7 +633,7 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 
 	runMsg(sMsg)
 
-	clone, err := b.createDBLabClone(user)
+	clone, err := b.createDBLabClone(ctx, user)
 	if err != nil {
 		sMsg.Fail(err.Error())
 		return err
@@ -624,7 +644,7 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 	user.Session.Clone = clone
 
 	if b.Config.HistoryEnabled {
-		if err := b.createPlatformSession(user, sMsg.ChannelId); err != nil {
+		if err := b.createPlatformSession(user, sMsg.ChannelID); err != nil {
 			sMsg.Fail(err.Error())
 			return err
 		}
@@ -663,7 +683,7 @@ func (b *Bot) isActiveSession(ctx context.Context, cloneID string) bool {
 }
 
 // createDBLabClone creates a new clone.
-func (b *Bot) createDBLabClone(user *User) (*models.Clone, error) {
+func (b *Bot) createDBLabClone(ctx context.Context, user *User) (*models.Clone, error) {
 	pwd, err := password.Generate(PasswordLength, PasswordMinDigits, PasswordMinSymbols, false, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate a password to a new clone")
@@ -679,7 +699,7 @@ func (b *Bot) createDBLabClone(user *User) (*models.Clone, error) {
 		},
 	}
 
-	clone, err := b.DBLab.CreateClone(context.TODO(), clientRequest)
+	clone, err := b.DBLab.CreateClone(ctx, clientRequest)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a new clone")
 	}

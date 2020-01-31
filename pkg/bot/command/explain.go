@@ -45,7 +45,7 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 		return err
 	}
 
-	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", res, msg.ChannelId, msg.Timestamp)
+	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", res, msg.ChannelID, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		//msg.Fail(err.Error())
@@ -93,13 +93,13 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 		return err
 	}
 
-	_, err = chat.UploadFile("plan-json", res, msg.ChannelId, msg.Timestamp)
+	_, err = chat.UploadFile("plan-json", res, msg.ChannelID, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err
 	}
 
-	filePlan, err := chat.UploadFile("plan-text", vis, msg.ChannelId, msg.Timestamp)
+	filePlan, err := chat.UploadFile("plan-text", vis, msg.ChannelID, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err

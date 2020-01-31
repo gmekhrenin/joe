@@ -42,7 +42,7 @@ func Transmit(apiCmd *api.ApiCommand, msg *chatapi.Message, chat *chatapi.Chat, 
 		return err
 	}
 
-	fileCmd, err := chat.UploadFile("command", cmd, msg.ChannelId, msg.Timestamp)
+	fileCmd, err := chat.UploadFile("command", cmd, msg.ChannelID, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err

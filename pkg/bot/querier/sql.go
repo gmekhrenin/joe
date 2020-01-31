@@ -39,6 +39,7 @@ func runQuery(connStr string, query string, omitResp bool) (string, error) {
 	}
 	defer db.Close()
 
+
 	rows, err := db.Query(query)
 	if err != nil {
 		log.Err("DB query:", err)
