@@ -518,7 +518,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	if err := b.RunSession(context.TODO(), user, ch); err != nil {
+	if err := b.runSession(context.TODO(), user, ch); err != nil {
 		log.Err(err)
 		return
 	}
@@ -570,14 +570,13 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 		if err != nil {
 			if _, ok := err.(*net.OpError); ok {
-				fmt.Println("postgres failed - try reconnect")
 
 				if iteration != maxRetryCounter {
 					if !b.isActiveSession(context.TODO(), user.Session.Clone.ID) {
 						msg.Append("Session was closed by Database Lab.\n")
 						user.Session.Clone = nil
 
-						if err := b.RunSession(context.TODO(), user, msg.ChannelID); err != nil {
+						if err := b.runSession(context.TODO(), user, msg.ChannelID); err != nil {
 							log.Err(err)
 							return
 						}
@@ -605,33 +604,8 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	okMsg(msg)
 }
 
-func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
-	db, err := sql.Open("postgres", dblabClone.ConnectionString())
-	if err != nil {
-		log.Err("DB connection:", err)
-		return nil, err
-	}
-
-	if err := db.PingContext(context.TODO()); err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return db, nil
-}
-
-func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
-	return dblab.Clone{
-		Name:     b.Config.DBLab.DBName,
-		Host:     DBParams.Host,
-		Port:     DBParams.Port,
-		Username: DBParams.Username,
-		Password: DBParams.Password,
-		SSLMode:  b.Config.DBLab.SSLMode,
-	}
-}
-
-// RunSession starts a user session if not exists.
-func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) error {
+// runSession starts a user session if not exists.
+func (b *Bot) runSession(ctx context.Context, user *User, channelID string) error {
 	sMsg, _ := b.Chat.NewMessage(channelID)
 
 	messageText := strings.Builder{}
@@ -688,6 +662,31 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 	okMsg(sMsg)
 
 	return nil
+}
+
+func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
+	return dblab.Clone{
+		Name:     b.Config.DBLab.DBName,
+		Host:     DBParams.Host,
+		Port:     DBParams.Port,
+		Username: DBParams.Username,
+		Password: DBParams.Password,
+		SSLMode:  b.Config.DBLab.SSLMode,
+	}
+}
+
+func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dblabClone.ConnectionString())
+	if err != nil {
+		log.Err("DB connection:", err)
+		return nil, err
+	}
+
+	if err := db.PingContext(context.TODO()); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return db, nil
 }
 
 // isActiveSession checks if current user session is active.
