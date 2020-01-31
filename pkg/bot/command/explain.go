@@ -5,6 +5,7 @@
 package command
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -18,7 +19,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, botCfg config.Bot, connStr string) error {
+func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, botCfg config.Bot, db *sql.DB) error {
 	var detailsText string
 	var trnd bool
 
@@ -29,7 +30,7 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 	}
 
 	// Explain request and show.
-	var res, err = querier.DBExplain(connStr, apiCmd.Query)
+	var res, err = querier.DBExplain(db, apiCmd.Query)
 	if err != nil {
 		return err
 	}
@@ -65,7 +66,7 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 	}
 
 	// Explain analyze request and processing.
-	res, err = querier.DBExplainAnalyze(connStr, apiCmd.Query)
+	res, err = querier.DBExplainAnalyze(db, apiCmd.Query)
 	if err != nil {
 		return err
 	}

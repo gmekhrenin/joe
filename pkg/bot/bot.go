@@ -7,6 +7,7 @@ package bot
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -211,7 +212,9 @@ type UserSession struct {
 
 	ChannelIDs []string
 
-	Clone *models.Clone
+	Clone           *models.Clone
+	ConnParams      dblab.Clone
+	CloneConnection *sql.DB
 }
 
 func NewBot(cfg config.Bot, chat *chatapi.Chat, dbLab *dblabapi.Client) *Bot {
@@ -244,27 +247,27 @@ func (b *Bot) checkIdleSessions(ctx context.Context) error {
 	channelsToNotify := make(map[string][]string)
 
 	// TODO(akartasov): Fix data races.
-	for _, u := range b.Users {
-		if u == nil || u.Session.Clone == nil {
+	for _, user := range b.Users {
+		if user == nil || user.Session.Clone == nil {
 			continue
 		}
 
-		minutesAgoSinceLastAction := util.MinutesAgo(u.Session.LastActionTs)
+		minutesAgoSinceLastAction := util.MinutesAgo(user.Session.LastActionTs)
 
-		if minutesAgoSinceLastAction < u.Session.Clone.Metadata.MaxIdleMinutes {
+		if minutesAgoSinceLastAction < user.Session.Clone.Metadata.MaxIdleMinutes {
 			continue
 		}
 
-		if b.isActiveSession(ctx, u.Session.Clone.ID) {
+		if b.isActiveSession(ctx, user.Session.Clone.ID) {
 			continue
 		}
 
-		log.Dbg("Session idle: %v %v", u, u.Session)
+		log.Dbg("Session idle: %v %v", user, user.Session)
 
-		u.Session.Clone = nil
+		b.stopSession(user)
 
-		for _, channelID := range u.Session.ChannelIDs {
-			chatUserID := u.ChatUser.ID
+		for _, channelID := range user.Session.ChannelIDs {
+			chatUserID := user.ChatUser.ID
 
 			channelsToNotify[channelID] = append(channelsToNotify[channelID], chatUserID)
 		}
@@ -522,18 +525,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	msgText = appendSessionId(msgText, user)
 
-	dbLabClone := dblab.Clone{
-		Name:     b.Config.DBLab.DBName,
-		Host:     user.Session.Clone.DB.Host,
-		Port:     user.Session.Clone.DB.Port,
-		Username: user.Session.Clone.DB.Username,
-		Password: user.Session.Clone.DB.Password,
-		SSLMode:  b.Config.DBLab.SSLMode,
-	}
-
-	connStr := dbLabClone.ConnectionString()
-	log.Dbg(connStr)
-
 	msg, err := b.Chat.NewMessage(ch)
 	if err != nil {
 		log.Err("Bot: Cannot create a message", err)
@@ -564,16 +555,16 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
 		switch {
 		case receivedCommand == COMMAND_EXPLAIN:
-			err = command.Explain(b.Chat, apiCmd, msg, b.Config, connStr)
+			err = command.Explain(b.Chat, apiCmd, msg, b.Config, user.Session.CloneConnection)
 
 		case receivedCommand == COMMAND_EXEC:
-			err = command.Exec(apiCmd, msg, connStr)
+			err = command.Exec(apiCmd, msg, user.Session.CloneConnection)
 
 		case receivedCommand == COMMAND_RESET:
 			err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
-			runner := pgtransmission.NewPgTransmitter(dbLabClone, pgtransmission.LogsEnabledDefault)
+			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
 			err = command.Transmit(apiCmd, msg, b.Chat, runner)
 		}
 
@@ -614,6 +605,31 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	okMsg(msg)
 }
 
+func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dblabClone.ConnectionString())
+	if err != nil {
+		log.Err("DB connection:", err)
+		return nil, err
+	}
+
+	if err := db.PingContext(context.TODO()); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return db, nil
+}
+
+func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
+	return dblab.Clone{
+		Name:     b.Config.DBLab.DBName,
+		Host:     DBParams.Host,
+		Port:     DBParams.Port,
+		Username: DBParams.Username,
+		Password: DBParams.Password,
+		SSLMode:  b.Config.DBLab.SSLMode,
+	}
+}
+
 // RunSession starts a user session if not exists.
 func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) error {
 	sMsg, _ := b.Chat.NewMessage(channelID)
@@ -624,8 +640,8 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 		return nil
 	}
 
-	// Reset session clone if not active.
-	user.Session.Clone = nil
+	// Stop clone session if not active.
+	b.stopSession(user)
 
 	messageText.WriteString(MsgSessionStarting)
 	sMsg.Publish(messageText.String())
@@ -641,7 +657,20 @@ func (b *Bot) RunSession(ctx context.Context, user *User, channelID string) erro
 
 	sMsg.Append(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes) * time.Minute))
 
+	if clone.DB == nil {
+		return errors.New("failed to get connection params")
+	}
+
+	dblabClone := b.buildDBLabCloneConn(clone.DB)
+
+	db, err := initConn(dblabClone)
+	if err != nil {
+		return errors.Wrap(err, "failed to init database connection")
+	}
+
+	user.Session.ConnParams = dblabClone
 	user.Session.Clone = clone
+	user.Session.CloneConnection = db
 
 	if b.Config.HistoryEnabled {
 		if err := b.createPlatformSession(user, sMsg.ChannelID); err != nil {
@@ -715,7 +744,7 @@ func (b *Bot) createPlatformSession(user *User, channelID string) error {
 	if err != nil {
 		log.Err("API: Create platform session:", err)
 
-		if err := b.stopSession(user); err != nil {
+		if err := b.destroySession(user); err != nil {
 			return errors.Wrap(err, "failed to stop a user session")
 		}
 
@@ -727,18 +756,27 @@ func (b *Bot) createPlatformSession(user *User, channelID string) error {
 	return nil
 }
 
-// stopSession stops a DatabaseLab session.
-func (b *Bot) stopSession(u *User) error {
+// destroySession destroys a DatabaseLab session.
+func (b *Bot) destroySession(u *User) error {
 	log.Dbg("Stopping session...")
 
 	if err := b.DBLab.DestroyClone(context.TODO(), u.Session.Clone.ID); err != nil {
 		return errors.Wrap(err, "failed to destroy clone")
 	}
 
-	u.Session.Clone = nil
-	u.Session.PlatformSessionId = ""
+	b.stopSession(u)
 
 	return nil
+}
+
+func (b *Bot) stopSession(user *User) {
+	user.Session.Clone = nil
+	user.Session.ConnParams = dblab.Clone{}
+	user.Session.PlatformSessionId = ""
+
+	if user.Session.CloneConnection != nil {
+		user.Session.CloneConnection.Close()
+	}
 }
 
 // ApiCreatePlatformSession makes an HTTP request to create a new platform session.

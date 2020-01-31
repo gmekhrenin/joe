@@ -13,6 +13,6 @@ type Clone struct {
 }
 
 func (clone Clone) ConnectionString() string {
-	return fmt.Sprintf("host=%q port=%q user=%q dbname=%q password=%q",
-		clone.Host, clone.Port, clone.Username, clone.Name, clone.Password)
+	return fmt.Sprintf("host=%q port=%q user=%q dbname=%q password=%q sslmode=%q",
+		clone.Host, clone.Port, clone.Username, clone.Name, clone.Password, clone.SSLMode)
 }
