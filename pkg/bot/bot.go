@@ -145,7 +145,7 @@ const dbLabUserNamePrefix = "dblab_"
 const (
 	PasswordLength     = 16
 	PasswordMinDigits  = 4
-	PasswordMinSymbols = 4
+	PasswordMinSymbols = 0
 )
 
 var hintExplainDmlWords = []string{"insert", "select", "update", "delete", "with"}
@@ -569,27 +569,26 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		}
 
 		if err != nil {
-			if _, ok := err.(*net.OpError); ok {
-
-				if iteration != maxRetryCounter {
-					if !b.isActiveSession(context.TODO(), user.Session.Clone.ID) {
-						msg.Append("Session was closed by Database Lab.\n")
-						user.Session.Clone = nil
-
-						if err := b.runSession(context.TODO(), user, msg.ChannelID); err != nil {
-							log.Err(err)
-							return
-						}
-
-						continue
-					}
-				}
+			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {
+				msg.Fail(err.Error())
+				apiCmd.Fail(err.Error())
+				return
 			}
 
-			msg.Fail(err.Error())
-			apiCmd.Fail(err.Error())
-			return
+			if b.isActiveSession(context.TODO(), user.Session.Clone.ID) {
+				continue
+			}
+
+			msg.Append("Session was closed by Database Lab.\n")
+			b.stopSession(user)
+
+			if err := b.runSession(context.TODO(), user, msg.ChannelID); err != nil {
+				log.Err(err)
+				return
+			}
 		}
+
+		break
 	}
 
 	if b.Config.HistoryEnabled {
