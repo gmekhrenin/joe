@@ -692,14 +692,7 @@ func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
 func (b *Bot) isActiveSession(ctx context.Context, cloneID string) bool {
 	clone, err := b.DBLab.GetClone(ctx, cloneID)
 	if err != nil {
-		errModel, ok := errors.Cause(err).(models.Error)
-		if !ok {
-			return false
-		}
-
-		if errModel.Code != models.ErrCodeNotFound {
-			return false
-		}
+		return false
 	}
 
 	if clone.Status.Code != models.StatusOK {
