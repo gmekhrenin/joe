@@ -49,8 +49,6 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", res, msg.ChannelID, msg.Timestamp)
 	if err != nil {
 		log.Err("File upload failed:", err)
-		//msg.Fail(err.Error())
-		// TODO (akartasov): Why no apiCmd.Fail?
 		return err
 	}
 
