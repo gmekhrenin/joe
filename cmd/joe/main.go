@@ -45,8 +45,6 @@ var opts struct {
 	QuotaLimit    uint `long:"quota-limit" description:"limit request rates to up to 2x of this number" env:"QUOTA_LIMIT" default:"10"`
 	QuotaInterval uint `long:"quota-interval" description:"an time interval (in seconds) to apply a quota-limit" env:"QUOTA_INTERVAL" default:"60"`
 
-	IdleInterval uint `long:"idle-interval" description:"an time interval (in seconds) before user session can be stoped due to idle" env:"IDLE_INTERVAL" default:"3600"`
-
 	// Platform.
 	ApiUrl         string `long:"api-url" description:"Postgres.ai platform API base URL" env:"API_URL" default:"https://postgres.ai/api/general"`
 	ApiToken       string `long:"api-token" description:"Postgres.ai platform API token" env:"API_TOKEN"`
@@ -97,7 +95,6 @@ func main() {
 		Explain:       explainConfig,
 		QuotaLimit:    opts.QuotaLimit,
 		QuotaInterval: opts.QuotaInterval,
-		IdleInterval:  opts.IdleInterval,
 
 		DBLab: config.DBLabInstance{
 			URL:     opts.DBLabURL,
