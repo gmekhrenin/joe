@@ -243,7 +243,6 @@ func NewUser(chatUser *slack.User, cfg config.Bot) *User {
 }
 
 func (b *Bot) checkIdleSessions(ctx context.Context) error {
-	// TODO(anatoly): List stopped session to channel.
 	channelsToNotify := make(map[string][]string)
 
 	// TODO(akartasov): Fix data races.
@@ -579,7 +578,9 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 				continue
 			}
 
-			msg.Append("Session was closed by Database Lab.\n")
+			if err := msg.Append("Session was closed by Database Lab.\n"); err != nil {
+				log.Err(fmt.Sprintf("failed to append message on session close: %+v", err))
+			}
 			b.stopSession(user)
 
 			if err := b.runSession(context.TODO(), user, msg.ChannelID); err != nil {
@@ -628,7 +629,10 @@ func (b *Bot) runSession(ctx context.Context, user *User, channelID string) erro
 		return err
 	}
 
-	sMsg.Append(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes) * time.Minute))
+	if err := sMsg.Append(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes) * time.Minute)); err != nil {
+		sMsg.Fail(err.Error())
+		return errors.Wrap(err, "failed to append message with a foreword")
+	}
 
 	if clone.DB == nil {
 		return errors.New("failed to get connection params")
@@ -657,7 +661,11 @@ func (b *Bot) runSession(ctx context.Context, user *User, channelID string) erro
 		sessionID = user.Session.PlatformSessionId
 	}
 
-	sMsg.Append(fmt.Sprintf("Session started: `%s`", sessionID))
+	if err := sMsg.Append(fmt.Sprintf("Session started: `%s`", sessionID)); err != nil {
+		sMsg.Fail(err.Error())
+		return errors.Wrap(err, "failed to append message about session start")
+	}
+
 	okMsg(sMsg)
 
 	return nil
