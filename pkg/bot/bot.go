@@ -718,7 +718,7 @@ func (b *Bot) createDBLabClone(ctx context.Context, user *User) (*models.Clone, 
 	}
 
 	clientRequest := dblabapi.CreateRequest{
-		Name:      xid.New().String(),
+		Name:      "joe-"+xid.New().String(),
 		Project:   user.Session.PlatformSessionId,
 		Protected: false,
 		DB: &dblabapi.DatabaseRequest{
