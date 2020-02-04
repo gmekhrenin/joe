@@ -27,9 +27,6 @@ GORUN = GO111MODULE=on go run ${LDFLAGS}
 # Build the project
 all: clean vet build
 
-dep:
-	go get -v -d -t ./...
-
 build:
 	${GOBUILD} -o bin/${BINARY} ./cmd/joe/main.go
 
@@ -48,5 +45,5 @@ clean:
 run:
 	go run ${LDFLAGS} ./cmd/joe/main.go
 
-.PHONY: all dep main test vet fmt clean run
+.PHONY: all main test vet fmt clean run
 
