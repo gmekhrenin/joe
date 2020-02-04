@@ -5,6 +5,7 @@
 package command
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -17,13 +18,13 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
-func Exec(apiCmd *api.ApiCommand, msg *chatapi.Message, connStr string) error {
+func Exec(apiCmd *api.ApiCommand, msg *chatapi.Message, db *sql.DB) error {
 	if apiCmd.Query == "" {
 		return errors.New(MsgExecOptionReq)
 	}
 
 	start := time.Now()
-	err := querier.DBExec(connStr, apiCmd.Query)
+	err := querier.DBExec(db, apiCmd.Query)
 	elapsed := time.Since(start)
 	if err != nil {
 		log.Err("Exec:", err)
