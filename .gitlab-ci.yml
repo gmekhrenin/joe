@@ -65,7 +65,7 @@ build-image-master:
   services:
     - docker:dind
   variables:
-    DOCKER_NAME: "registry.gitlab.com/postgres-ai/database-lab/joe"
+    DOCKER_NAME: "registry.gitlab.com/postgres-ai/joe"
   script:
     - set -x #TODO: Remove before merge.
 
