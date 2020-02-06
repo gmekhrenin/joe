@@ -11,6 +11,6 @@
 - Dockerize the Joe application.
 - Build and push Docker images to Docker Hub and Gitlab Registry.
 - Migrate to Go modules.
-- Refactor a psql runner.
+- Refactor the psql runner.
 - Update README.
 
