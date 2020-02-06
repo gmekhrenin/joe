@@ -49,7 +49,7 @@ Deploy Joe instance in your infrastructure. You would need to:
     The Joe instance will be running by port 3000 of the current machine.
     
 1. Make a publicly accessible HTTP(S) server port specified in the configuration for Slack Events Request URL.
-1. Send a command to the #db-lab channel. For example, `\d`
+1. Send a command to the #db-lab channel. For example, `\d`.
 
 
 ## Development
