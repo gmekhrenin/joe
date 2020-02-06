@@ -8,7 +8,6 @@
 - Support idle sessions on the Joe side.
 - Use new synchronous methods from Database Lab SDK.
 - Use a single connection per user session.
-- Remove the AWS part and other modes completely, use SDK instead.
 - Dockerize the Joe application.
 - Build and push Docker images to Docker Hub and Gitlab Registry.
 - Migrate to Go modules.
