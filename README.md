@@ -12,7 +12,7 @@ for query optimization and the ability to rollback.
 ## Install Software
 
 ### 1. Database Lab
-Install [Database Lab](./database-lab/) 
+Install and setup [Database Lab](https://gitlab.com/postgres-ai/database-lab) 
 
 ### 2. Slack App
 Configure a new Slack App in order to use Joe in Slack and add the app to your
