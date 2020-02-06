@@ -4,7 +4,7 @@
 
 ## [0.4.0] - 2020-02-06
 
-- Use Client SDK instead of provision code which duplicates Database Lab server code.
+- Provisioning code fully replaced by Database Lab Client SDK
 - Support idle sessions on the Joe side.
 - Use new synchronous methods from Database Lab SDK.
 - Use a single connection per user session.
