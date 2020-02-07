@@ -122,7 +122,7 @@ const MsgSessionForewordTpl = "• Say `help` to see the full list of commands.\
 	"• The actual timing values may differ from production because actual caches in DB Lab are smaller. " +
 	"However, the number of bytes and pages/buffers in plans are identical to production.\n" +
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe \n" +
-	"Snapshot data state at: %s.\n"
+	"\nSnapshot data state at: %s."
 
 const RCTN_RUNNING = "hourglass_flowing_sand"
 const RCTN_OK = "white_check_mark"
