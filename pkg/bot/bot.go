@@ -402,7 +402,7 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	message = strings.TrimRight(message, "`")
 
 	// Get user or create a new one.
-	user, err := b.getUser(ev.User)
+	user, err := b.createUser(ev.User)
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
