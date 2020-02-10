@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [Ready, in master, but not released yet]
 
 ## [0.4.0] - 2020-02-06
 
