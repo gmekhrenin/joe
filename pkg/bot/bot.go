@@ -114,7 +114,7 @@ const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, 
 	"• `\\d`, `\\d+`, `\\dt`, `\\dt+`, `\\di`, `\\di+`, `\\l`, `\\l+`, `\\dv`, `\\dv+`, `\\dm`, `\\dm+` — psql meta information commands\n" +
 	"• `help` — this message\n"
 
-const MsgSessionStarting = "Starting new session...\n\n"
+const MsgSessionStarting = "Starting new session...\n"
 
 const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\n" +
 	"• Sessions are fully independent. Feel free to do anything.\n" +
