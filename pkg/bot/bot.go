@@ -518,16 +518,17 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	remindDuration := time.Duration(b.Config.QueryReminderMinutes) * time.Minute
-	if err := msg.SetLongRunningTimestamp(remindDuration); err != nil {
-		log.Err(err)
-	}
-
 	if err := msg.Publish(msgText); err != nil {
 		// TODO(anatoly): Retry.
 		log.Err("Bot: Cannot publish a message", err)
 		return
 	}
+
+	remindDuration := time.Duration(b.Config.QueryReminderMinutes) * time.Minute
+	if err := msg.SetLongRunningTimestamp(remindDuration); err != nil {
+		log.Err(err)
+	}
+	msg.SetChatUserID(user.ChatUser.ID)
 
 	msg.Run()
 

@@ -158,6 +158,15 @@ func (m *Message) Publish(text string) error {
 	return nil
 }
 
+// PublishToThread publishes a new message to a thread.
+func (m *Message) PublishToThread(text, threadTimestamp string) error {
+	_, _, err := m.Chat.Api.PostMessage(m.ChannelID,
+		slack.MsgOptionText(text, false),
+		slack.MsgOptionTS(threadTimestamp))
+
+	return err
+}
+
 // Publish a message as ephemeral.
 func (m *Message) PublishEphemeral(text string, userId string) error {
 	timestamp, err := m.Chat.Api.PostEphemeral(m.ChannelID, userId,
@@ -256,12 +265,14 @@ func (m *Message) SetLongRunningTimestamp(notificationTimeout time.Duration) err
 		return nil
 	}
 
-	parsedTimestamp, err := strconv.ParseInt(m.Timestamp, 10, 64)
+	// Parse timestamp with microseconds.
+	parsedTimestamp, err := strconv.ParseInt(strings.Replace(m.Timestamp, ".", "", -1), 10, 64)
 	if err != nil {
 		return errors.Wrap(err, "failed to parse message timestamp")
 	}
 
-	messageTimestamp := time.Unix(parsedTimestamp, 0)
+	// Convert microseconds to time.
+	messageTimestamp := time.Unix(parsedTimestamp/1000000, 0)
 
 	longRunningTimestamp := messageTimestamp.Add(notificationTimeout)
 	m.longRunningTimestamp = &longRunningTimestamp
@@ -317,9 +328,9 @@ func (m *Message) notifyAboutRequestFinish() error {
 		return nil
 	}
 
-	text := fmt.Sprintf("<@%s>", m.chatUserID)
+	text := fmt.Sprintf("<@%s> The request has been finished.", m.chatUserID)
 
-	if err := m.Publish(text); err != nil {
+	if err := m.PublishToThread(text, m.Timestamp); err != nil {
 		return errors.Wrap(err, "failed to publish a user mention")
 	}
 
