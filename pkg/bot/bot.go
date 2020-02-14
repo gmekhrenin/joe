@@ -125,9 +125,6 @@ const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe \n" +
 	"\nJoe version: %s.\nSnapshot data state at: %s."
 
-const RCTN_RUNNING = "hourglass_flowing_sand"
-const RCTN_OK = "white_check_mark"
-
 const SEPARATOR_ELLIPSIS = "\n[...SKIP...]\n"
 
 const HINT_EXPLAIN = "Consider using `explain` command for DML statements. See `help` for details."
@@ -521,13 +518,18 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
+	remindDuration := time.Duration(b.Config.QueryReminderMinutes) * time.Minute
+	if err := msg.SetLongRunningTimestamp(remindDuration); err != nil {
+		log.Err(err)
+	}
+
 	if err := msg.Publish(msgText); err != nil {
 		// TODO(anatoly): Retry.
 		log.Err("Bot: Cannot publish a message", err)
 		return
 	}
 
-	runMsg(msg)
+	msg.Run()
 
 	apiCmd := &api.ApiCommand{
 		AccessToken: b.Config.ApiToken,
@@ -592,7 +594,9 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		}
 	}
 
-	okMsg(msg)
+	if err := msg.OK(); err != nil {
+		log.Err(err)
+	}
 }
 
 // runSession starts a user session if not exists.
@@ -612,7 +616,7 @@ func (b *Bot) runSession(ctx context.Context, user *User, channelID string) erro
 	sMsg.Publish(messageText.String())
 	messageText.Reset()
 
-	runMsg(sMsg)
+	sMsg.Run()
 
 	clone, err := b.createDBLabClone(ctx, user)
 	if err != nil {
@@ -658,7 +662,9 @@ func (b *Bot) runSession(ctx context.Context, user *User, channelID string) erro
 		return errors.Wrap(err, "failed to append message about session start")
 	}
 
-	okMsg(sMsg)
+	if err := sMsg.OK(); err != nil {
+		log.Err(err)
+	}
 
 	return nil
 }
@@ -833,21 +839,6 @@ func appendSessionId(text string, u *User) string {
 
 func appendHelp(text string, version string) string {
 	return text + MSG_HELP + fmt.Sprintf("Version: %s\n", version)
-}
-
-// TODO(anatoly): Retries, error processing.
-func runMsg(msg *chatapi.Message) {
-	err := msg.ChangeReaction(RCTN_RUNNING)
-	if err != nil {
-		log.Err(err)
-	}
-}
-
-func okMsg(msg *chatapi.Message) {
-	err := msg.ChangeReaction(RCTN_OK)
-	if err != nil {
-		log.Err(err)
-	}
 }
 
 // Show bot usage hints.

@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
+	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"github.com/nlopes/slack"
@@ -25,7 +28,12 @@ const ERROR_NOT_PUBLISHED = "Message not published yet"
 
 const CONTENT_TYPE_TEXT = "text/plain"
 
-const RCTN_ERROR = "x"
+// Bot reactions.
+const (
+	ReactionRunning = "hourglass_flowing_sand"
+	ReactionError   = "x"
+	ReactionOK      = "white_check_mark"
+)
 
 type Chat struct {
 	Api               *slack.Client
@@ -34,11 +42,13 @@ type Chat struct {
 }
 
 type Message struct {
-	ChannelID string
-	Timestamp string // Used as message id in Slack API.
-	Text      string // Used to accumulate message text to append new parts by edit.
-	Reaction  string // We will support only one reaction for now.
-	Chat      *Chat
+	ChannelID            string
+	chatUserID           string
+	Timestamp            string // Used as message id in Slack API.
+	longRunningTimestamp *time.Time
+	Text                 string // Used to accumulate message text to append new parts by edit.
+	Reaction             string // We will support only one reaction for now.
+	Chat                 *Chat
 }
 
 func NewChat(accessToken string, verificationToken string) *Chat {
@@ -62,9 +72,6 @@ func (c *Chat) NewMessage(channelID string) (*Message, error) {
 
 	msg = Message{
 		ChannelID: channelID,
-		Timestamp: "",
-		Text:      "",
-		Reaction:  "",
 		Chat:      c,
 	}
 
@@ -240,6 +247,28 @@ func (m *Message) ChangeReaction(reaction string) error {
 	return nil
 }
 
+func (m *Message) SetChatUserID(chatUserID string) {
+	m.chatUserID = chatUserID
+}
+
+func (m *Message) SetLongRunningTimestamp(notificationTimeout time.Duration) error {
+	if m.Timestamp == "" {
+		return nil
+	}
+
+	parsedTimestamp, err := strconv.ParseInt(m.Timestamp, 10, 64)
+	if err != nil {
+		return errors.Wrap(err, "failed to parse message timestamp")
+	}
+
+	messageTimestamp := time.Unix(parsedTimestamp, 0)
+
+	longRunningTimestamp := messageTimestamp.Add(notificationTimeout)
+	m.longRunningTimestamp = &longRunningTimestamp
+
+	return nil
+}
+
 func (m *Message) isPublished() bool {
 	if len(m.ChannelID) == 0 || len(m.Timestamp) == 0 {
 		return false
@@ -248,16 +277,53 @@ func (m *Message) isPublished() bool {
 	return true
 }
 
+// TODO(akartasov): Retries, error processing.
 func (m *Message) Fail(text string) {
-	err := m.Append(fmt.Sprintf("ERROR: %s", text))
-	if err != nil {
+	if err := m.Append(fmt.Sprintf("ERROR: %s", text)); err != nil {
 		log.Err(err)
 	}
 
-	err = m.ChangeReaction(RCTN_ERROR)
+	if err := m.ChangeReaction(ReactionError); err != nil {
+		log.Err(err)
+	}
+
+	if err := m.notifyAboutRequestFinish(); err != nil {
+		log.Err(err)
+	}
+}
+
+func (m *Message) Run() {
+	err := m.ChangeReaction(ReactionRunning)
 	if err != nil {
 		log.Err(err)
 	}
+}
+
+func (m *Message) OK() error {
+	if err := m.ChangeReaction(ReactionOK); err != nil {
+		return errors.Wrap(err, "failed to change reaction")
+	}
+
+	if err := m.notifyAboutRequestFinish(); err != nil {
+		return errors.Wrap(err, "failed to notify about finishing a long request")
+	}
+
+	return nil
+}
+
+func (m *Message) notifyAboutRequestFinish() error {
+	now := time.Now()
+	if m.chatUserID == "" || m.longRunningTimestamp == nil || now.Before(*m.longRunningTimestamp) {
+		return nil
+	}
+
+	text := fmt.Sprintf("<@%s>", m.chatUserID)
+
+	if err := m.Publish(text); err != nil {
+		return errors.Wrap(err, "failed to publish a user mention")
+	}
+
+	return nil
 }
 
 func (c *Chat) GetUserInfo(id string) (*slack.User, error) {
