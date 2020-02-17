@@ -58,7 +58,7 @@ var opts struct {
 	ShowHelp func() error `long:"help" description:"Show this help message"`
 
 	// Enterprise features (changing these options you confirm that you have active subscription to Postgres.ai Platform Enterprise Edition https://postgres.ai).
-	QuotaLimit    uint `long:"quota-limit" description:"limit request rates to up to 2x of this number" env:"EE_QUOTA_LIMIT" default:"1"`
+	QuotaLimit    uint `long:"quota-limit" description:"limit request rates to up to 2x of this number" env:"EE_QUOTA_LIMIT" default:"10"`
 	QuotaInterval uint `long:"quota-interval" description:"a time interval (in seconds) to apply a quota-limit" env:"EE_QUOTA_INTERVAL" default:"60"`
 	AuditEnabled  bool `long:"audit-enabled" description:"enable logging of received commands" env:"EE_AUDIT_ENABLED"`
 }
