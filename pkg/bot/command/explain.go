@@ -41,16 +41,23 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 
 	msgInitText := msg.Text
 
-	err = msg.Append(fmt.Sprintf("*Plan:*\n```%s```", planPreview))
-	if err != nil {
+	includeHypoPG := false
+	explainPlanTitle := ""
+
+	if hypoIndexes, err := listHypoIndexes(db); err == nil && len(hypoIndexes) > 0 {
+		if isHypoIndexInvolved(explainResult, hypoIndexes) {
+			explainPlanTitle = " (HypoPG involved)"
+			includeHypoPG = true
+		}
+	}
+
+	if err := msg.Append(fmt.Sprintf("*Plan%s:*\n```%s```", explainPlanTitle, planPreview)); err != nil {
 		log.Err("Show plan: ", err)
 		return err
 	}
 
-	if hypoIndexes, err := hypoIndexes(db); err == nil && len(hypoIndexes) > 0 {
-		if showPlanWithoutExecution(explainResult, hypoIndexes) {
-			msgInitText = msg.Text
-		}
+	if includeHypoPG {
+		msgInitText = msg.Text
 	}
 
 	filePlanWoExec, err := chat.UploadFile("plan-wo-execution-text", explainResult, msg.ChannelID, msg.Timestamp)
@@ -161,7 +168,7 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 	return nil
 }
 
-func hypoIndexes(db *sql.DB) ([]string, error) {
+func listHypoIndexes(db *sql.DB) ([]string, error) {
 	rows, err := db.Query("SELECT indexname FROM hypopg_list_indexes()")
 	if err != nil {
 		return nil, err
@@ -180,7 +187,7 @@ func hypoIndexes(db *sql.DB) ([]string, error) {
 	return hypoIndexes, nil
 }
 
-func showPlanWithoutExecution(explainResult string, hypoIndexes []string) bool {
+func isHypoIndexInvolved(explainResult string, hypoIndexes []string) bool {
 	for _, index := range hypoIndexes {
 		if strings.Contains(explainResult, index) {
 			return true
