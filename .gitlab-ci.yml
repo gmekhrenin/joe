@@ -23,7 +23,7 @@ build-binary:
   stage: build-binary
   only:
     refs:
-      - master
+      - branches
       - tags
   artifacts:
     paths:
