@@ -40,7 +40,7 @@ build-binary:
   services:
     - docker:dind
   script:
-    - apk update && apk upgrade && apk add --no-cache bash # TODO(anatoly): Remove dependency.
+    - apk add --no-cache bash # TODO(anatoly): Remove dependency.
     - bash ./scripts/ci_docker_build_push.sh
 
 .only_var_template: &only_tag_release
