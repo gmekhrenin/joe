@@ -21,9 +21,15 @@ const (
 // SyntaxPQErrorCode defines the pq syntax error code.
 const SyntaxPQErrorCode = "42601"
 
+// DBExec runs query without returning results.
 func DBExec(db *sql.DB, query string) error {
 	_, err := runQuery(db, query, true)
 	return err
+}
+
+// DBQuery runs query and returns results.
+func DBQuery(db *sql.DB, query string, args ...interface{}) (string, error) {
+	return runQuery(db, query, false, args)
 }
 
 func DBExplain(db *sql.DB, query string) (string, error) {
@@ -34,13 +40,13 @@ func DBExplainAnalyze(db *sql.DB, query string) (string, error) {
 	return runQuery(db, QueryExplainAnalyze+query, false)
 }
 
-func runQuery(db *sql.DB, query string, omitResp bool) (string, error) {
+func runQuery(db *sql.DB, query string, omitResp bool, args ...interface{}) (string, error) {
 	log.Dbg("DB query:", query)
 
 	// TODO(anatoly): Retry mechanic.
 	var result = ""
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, args)
 	if err != nil {
 		log.Err("DB query:", err)
 		return "", clarifyQueryError([]byte(query), err)
@@ -77,7 +83,7 @@ func clarifyQueryError(query []byte, err error) error {
 			// Check &nbsp; - ASCII code 160
 			if bytes.Contains(query, []byte{160}) {
 				return errors.WithMessage(err,
-					`There are "non-breaking spaces" in your input (ACSII code 160). Please edit your request and use regular spaces only (ASCII code 32).`)
+					`There are "non-breaking spaces" in your input (ASCII code 160). Please edit your request and use regular spaces only (ASCII code 32).`)
 			}
 		default:
 			return err

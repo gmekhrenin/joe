@@ -47,6 +47,7 @@ const COMMAND_EXPLAIN = "explain"
 const COMMAND_EXEC = "exec"
 const COMMAND_RESET = "reset"
 const COMMAND_HELP = "help"
+const COMMAND_HYPO = "hypo"
 
 const COMMAND_PSQL_D = `\d`
 const COMMAND_PSQL_DP = `\d+`
@@ -389,6 +390,8 @@ func (b *Bot) processAppMentionEvent(ev *slackevents.AppMentionEvent) {
 func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	var err error
 
+	// Filter event.
+
 	// Skip messages sent by bots.
 	if ev.User == "" || ev.BotID != "" {
 		log.Dbg("Message filtered: Bot")
@@ -407,9 +410,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 	}
 
 	ch := ev.Channel
-	message := strings.TrimSpace(ev.Text)
-	message = strings.TrimLeft(message, "`")
-	message = strings.TrimRight(message, "`")
 
 	// Get user or create a new one.
 	user, err := b.createUser(ev.User)
@@ -428,6 +428,10 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		user.Session.ChannelIDs = append(user.Session.ChannelIDs, ch)
 	}
 
+	// Filter and prepare message.
+	message := strings.TrimSpace(ev.Text)
+	message = strings.TrimLeft(message, "`")
+	message = strings.TrimRight(message, "`")
 	message = formatSlackMessage(message)
 
 	// Get command from snippet if exists. Snippets allow longer queries support.
@@ -554,7 +558,6 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 		Command:     receivedCommand,
 		Query:       query,
 		SlackTs:     ev.TimeStamp,
-		Error:       "",
 	}
 
 	const maxRetryCounter = 1
@@ -566,10 +569,15 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 			err = command.Explain(b.Chat, apiCmd, msg, b.Config, user.Session.CloneConnection)
 
 		case receivedCommand == COMMAND_EXEC:
-			err = command.Exec(apiCmd, msg, user.Session.CloneConnection)
+			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection)
+			err = execCmd.Execute()
 
 		case receivedCommand == COMMAND_RESET:
 			err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
+
+		case receivedCommand == COMMAND_HYPO:
+			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection)
+			err = hypoCmd.Execute()
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
