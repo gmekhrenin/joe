@@ -44,6 +44,10 @@ func NewHypo(apiCmd *api.ApiCommand, msg *chatapi.Message, db *sql.DB) *HypoCmd 
 func (h *HypoCmd) Execute() error {
 	hypoSub, commandTail := h.parseQuery()
 
+	if err := h.initExtension(); err != nil {
+		return errors.Wrap(err, "failed to init extension")
+	}
+
 	switch hypoSub {
 	case hypoCreate:
 		return h.create()
@@ -71,6 +75,10 @@ func (h *HypoCmd) parseQuery() (string, string) {
 	}
 
 	return hypoSubcommand, parts[1]
+}
+
+func (h *HypoCmd) initExtension() error {
+	return querier.DBExec(h.db, "CREATE EXTENSION IF NOT EXISTS hypopg;")
 }
 
 func (h *HypoCmd) create() error {

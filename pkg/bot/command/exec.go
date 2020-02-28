@@ -18,6 +18,9 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
+// MsgExecOptionReq describes an exec error.
+const MsgExecOptionReq = "Use `exec` to run query, e.g. `exec drop index some_index_name`"
+
 // ExecCmd defines the exec command.
 type ExecCmd struct {
 	apiCommand *api.ApiCommand
