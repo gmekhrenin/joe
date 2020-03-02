@@ -81,7 +81,7 @@ func (h *HypoCmd) initExtension() error {
 }
 
 func (h *HypoCmd) create() error {
-	query := "SELECT indexrelid FROM hypopg_create_index($1)"
+	query := "SELECT * FROM hypopg_create_index($1)"
 	res, err := querier.DBQuery(h.db, query, h.apiCommand.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")

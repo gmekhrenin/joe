@@ -126,6 +126,8 @@ func RenderTable(res [][]string) *strings.Builder {
 	}
 
 	table := tablewriter.NewWriter(tableString)
+	table.SetBorder(false)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
 	table.SetHeader(res[0])
 	table.AppendBulk(res[1:])
 	table.Render()
