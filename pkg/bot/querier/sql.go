@@ -119,6 +119,8 @@ func runTableQuery(db *sql.DB, query string, args ...interface{}) ([][]string, e
 // RenderTable renders table result in the psql style.
 func RenderTable(res [][]string) *strings.Builder {
 	tableString := &strings.Builder{}
+	tableString.Write([]byte("```"))
+	defer tableString.Write([]byte("```"))
 
 	if len(res) == 0 {
 		tableString.WriteString("No results.")
