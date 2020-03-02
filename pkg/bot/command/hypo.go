@@ -81,8 +81,7 @@ func (h *HypoCmd) initExtension() error {
 }
 
 func (h *HypoCmd) create() error {
-	query := "SELECT * FROM hypopg_create_index($1)"
-	res, err := querier.DBQuery(h.db, query, h.apiCommand.Query)
+	res, err := querier.DBQuery(h.db, "SELECT * FROM hypopg_create_index($1)", h.apiCommand.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")
 	}
@@ -126,8 +125,7 @@ func (h *HypoCmd) drop(indexID string) error {
 		return errors.Errorf("failed to drop a hypothetical index: indexrelid required")
 	}
 
-	query := "SELECT * FROM hypopg_drop_index($1);"
-	res, err := querier.DBQuery(h.db, query, indexID)
+	res, err := querier.DBQuery(h.db, "SELECT * FROM hypopg_drop_index($1);", indexID)
 	if err != nil {
 		return errors.Wrap(err, "failed to drop index")
 	}
@@ -142,15 +140,9 @@ func (h *HypoCmd) drop(indexID string) error {
 }
 
 func (h *HypoCmd) reset() error {
-	res, err := querier.DBQuery(h.db, "SELECT * FROM hypopg_reset();")
+	err := querier.DBExec(h.db, "SELECT * FROM hypopg_reset();")
 	if err != nil {
 		return errors.Wrap(err, "failed to reset indexes")
-	}
-
-	tableString := querier.RenderTable(res)
-
-	if err := h.message.Append(tableString.String()); err != nil {
-		return errors.Wrap(err, "failed to publish message")
 	}
 
 	return nil
