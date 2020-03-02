@@ -6,7 +6,6 @@ package command
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -82,13 +81,15 @@ func (h *HypoCmd) initExtension() error {
 }
 
 func (h *HypoCmd) create() error {
-	query := fmt.Sprintf("SELECT * FROM hypopg_create_index('%s')", h.apiCommand.Query)
-	res, err := querier.DBQuery(h.db, query)
+	query := "SELECT indexrelid FROM hypopg_create_index($1)"
+	res, err := querier.DBQuery(h.db, query, h.apiCommand.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")
 	}
 
-	if err := h.message.Append(res); err != nil {
+	tableString := querier.RenderTable(res)
+
+	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
 	}
 
@@ -111,7 +112,9 @@ func (h *HypoCmd) describe(indexID string) error {
 		return errors.Wrap(err, "failed to run description query")
 	}
 
-	if err := h.message.Append(res); err != nil {
+	tableString := querier.RenderTable(res)
+
+	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
 	}
 
@@ -129,7 +132,9 @@ func (h *HypoCmd) drop(indexID string) error {
 		return errors.Wrap(err, "failed to drop index")
 	}
 
-	if err := h.message.Append(res); err != nil {
+	tableString := querier.RenderTable(res)
+
+	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
 	}
 
@@ -142,7 +147,9 @@ func (h *HypoCmd) reset() error {
 		return errors.Wrap(err, "failed to reset indexes")
 	}
 
-	if err := h.message.Append(res); err != nil {
+	tableString := querier.RenderTable(res)
+
+	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
 	}
 

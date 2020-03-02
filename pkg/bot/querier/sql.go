@@ -7,8 +7,10 @@ package querier
 import (
 	"bytes"
 	"database/sql"
+	"strings"
 
 	"github.com/lib/pq"
+	"github.com/olekukonko/tablewriter"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 )
@@ -27,9 +29,9 @@ func DBExec(db *sql.DB, query string) error {
 	return err
 }
 
-// DBQuery runs query and returns results.
-func DBQuery(db *sql.DB, query string, args ...interface{}) (string, error) {
-	return runQuery(db, query, false, args)
+// DBQuery runs query and returns table results.
+func DBQuery(db *sql.DB, query string, args ...interface{}) ([][]string, error) {
+	return runTableQuery(db, query, args...)
 }
 
 func DBExplain(db *sql.DB, query string) (string, error) {
@@ -46,7 +48,7 @@ func runQuery(db *sql.DB, query string, omitResp bool, args ...interface{}) (str
 	// TODO(anatoly): Retry mechanic.
 	var result = ""
 
-	rows, err := db.Query(query, args)
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		log.Err("DB query:", err)
 		return "", clarifyQueryError([]byte(query), err)
@@ -69,6 +71,66 @@ func runQuery(db *sql.DB, query string, omitResp bool, args ...interface{}) (str
 	}
 
 	return result, nil
+}
+
+// runTableQuery runs query and returns results in the table view.
+func runTableQuery(db *sql.DB, query string, args ...interface{}) ([][]string, error) {
+	log.Dbg("DB table query:", query)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		log.Err("DB query:", err)
+		return nil, clarifyQueryError([]byte(query), err)
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		log.Err("Failed to get columns:", err)
+		return nil, errors.Wrap(err, "failed to read column names")
+	}
+
+	// Prepare a result table.
+	resultTable := [][]string{columns}
+
+	row := make([]string, len(columns))
+	scanInterfaces := make([]interface{}, len(columns))
+
+	for i := range scanInterfaces {
+		scanInterfaces[i] = &row[i]
+	}
+
+	for rows.Next() {
+		if err := rows.Scan(scanInterfaces...); err != nil {
+			log.Err("DB query traversal:", err)
+			return nil, err
+		}
+		resultTable = append(resultTable, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Err("DB query traversal:", err)
+		return resultTable, err
+	}
+
+	return resultTable, nil
+}
+
+// RenderTable renders table result in the psql style.
+func RenderTable(res [][]string) *strings.Builder {
+	tableString := &strings.Builder{}
+
+	if len(res) == 0 {
+		tableString.WriteString("No results.")
+		return tableString
+	}
+
+	table := tablewriter.NewWriter(tableString)
+	table.SetHeader(res[0])
+	table.AppendBulk(res[1:])
+	table.Render()
+
+	return tableString
 }
 
 func clarifyQueryError(query []byte, err error) error {

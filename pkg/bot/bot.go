@@ -65,6 +65,7 @@ const COMMAND_PSQL_DMP = `\dm+`
 
 var supportedCommands = []string{
 	COMMAND_EXPLAIN,
+	COMMAND_HYPO,
 	COMMAND_EXEC,
 	COMMAND_RESET,
 	COMMAND_HELP,
