@@ -28,9 +28,9 @@ const (
 const HypoPGCaption = "*HypoPG response:*\n"
 
 // hypoPGExceptionMessage  defines an error message on failure of extension initialize.
-const hypoPGExceptionMessage = `Cannot init the HypoPG extension.
+const hypoPGExceptionMessage = `:warning: Cannot init the HypoPG extension.
 Make sure that the extension has been installed in your Postgres image for Database Lab: https://postgres.ai/docs/database-lab/supported_databases.
-For a quick start, you can use prepared images: https://hub.docker.com/repository/docker/postgresai/extended-postgres created by Postgres.ai, or prepare your own.`
+For a quick start, you can use prepared images: https://hub.docker.com/repository/docker/postgresai/extended-postgres created by *Postgres.ai*, or prepare your own.`
 
 // HypoCmd defines a hypo command.
 type HypoCmd struct {
