@@ -20,8 +20,13 @@ const (
 	QueryExplainAnalyze = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 )
 
-// SyntaxPQErrorCode defines the pq syntax error code.
-const SyntaxPQErrorCode = "42601"
+const (
+	// SyntaxPQErrorCode defines the pq syntax error code.
+	SyntaxPQErrorCode = "42601"
+
+	// SystemPQErrorCodeUndefinedFile defines external errors to PostgreSQL itself.
+	SystemPQErrorCodeUndefinedFile = "58P01"
+)
 
 // DBExec runs query without returning results.
 func DBExec(db *sql.DB, query string) error {
@@ -117,14 +122,13 @@ func runTableQuery(db *sql.DB, query string, args ...interface{}) ([][]string, e
 }
 
 // RenderTable renders table result in the psql style.
-func RenderTable(res [][]string) *strings.Builder {
-	tableString := &strings.Builder{}
+func RenderTable(tableString *strings.Builder, res [][]string) {
 	tableString.Write([]byte("```"))
 	defer tableString.Write([]byte("```"))
 
 	if len(res) == 0 {
-		tableString.WriteString("No results.")
-		return tableString
+		tableString.WriteString("No results.\n")
+		return
 	}
 
 	table := tablewriter.NewWriter(tableString)
@@ -133,8 +137,6 @@ func RenderTable(res [][]string) *strings.Builder {
 	table.SetHeader(res[0])
 	table.AppendBulk(res[1:])
 	table.Render()
-
-	return tableString
 }
 
 func clarifyQueryError(query []byte, err error) error {

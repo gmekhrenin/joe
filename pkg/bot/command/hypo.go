@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
@@ -22,6 +23,14 @@ const (
 	hypoDrop   = "drop"
 	hypoReset  = "reset"
 )
+
+// HypoPGCaption contains caption for rendered tables.
+const HypoPGCaption = "*HypoPG response:*\n"
+
+// hypoPGExceptionMessage  defines an error message on failure of extension initialize.
+const hypoPGExceptionMessage = `Cannot init the HypoPG extension.
+Make sure that the extension has been installed in your Postgres image for Database Lab: https://postgres.ai/docs/database-lab/supported_databases.
+For a quick start, you can use prepared images: https://hub.docker.com/repository/docker/postgresai/extended-postgres created by Postgres.ai, or prepare your own.`
 
 // HypoCmd defines a hypo command.
 type HypoCmd struct {
@@ -44,6 +53,14 @@ func (h *HypoCmd) Execute() error {
 	hypoSub, commandTail := h.parseQuery()
 
 	if err := h.initExtension(); err != nil {
+		if pqError, ok := err.(*pq.Error); ok && pqError.Code == querier.SystemPQErrorCodeUndefinedFile {
+			if err := h.message.Append(hypoPGExceptionMessage); err != nil {
+				return errors.Wrap(err, "failed to publish message")
+			}
+
+			return nil
+		}
+
 		return errors.Wrap(err, "failed to init extension")
 	}
 
@@ -65,11 +82,13 @@ func (h *HypoCmd) Execute() error {
 }
 
 func (h *HypoCmd) parseQuery() (string, string) {
-	parts := strings.SplitN(h.apiCommand.Query, " ", 2)
+	const splitParts = 2
+
+	parts := strings.SplitN(h.apiCommand.Query, " ", splitParts)
 
 	hypoSubcommand := strings.ToLower(parts[0])
 
-	if len(parts) < 2 {
+	if len(parts) < splitParts {
 		return hypoSubcommand, ""
 	}
 
@@ -77,16 +96,18 @@ func (h *HypoCmd) parseQuery() (string, string) {
 }
 
 func (h *HypoCmd) initExtension() error {
-	return querier.DBExec(h.db, "CREATE EXTENSION IF NOT EXISTS hypopg;")
+	return querier.DBExec(h.db, "create extension if not exists hypopg")
 }
 
 func (h *HypoCmd) create() error {
-	res, err := querier.DBQuery(h.db, "SELECT * FROM hypopg_create_index($1)", h.apiCommand.Query)
+	res, err := querier.DBQuery(h.db, "select * from hypopg_create_index($1)", h.apiCommand.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")
 	}
 
-	tableString := querier.RenderTable(res)
+	tableString := &strings.Builder{}
+	tableString.WriteString(HypoPGCaption)
+	querier.RenderTable(tableString, res)
 
 	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
@@ -96,13 +117,13 @@ func (h *HypoCmd) create() error {
 }
 
 func (h *HypoCmd) describe(indexID string) error {
-	query := "SELECT * FROM hypopg_list_indexes()"
+	query := "select * from hypopg_list_indexes()"
 	queryArgs := []interface{}{}
 
 	if indexID != "" {
-		query = `SELECT indexrelid, indexname, hypopg_get_indexdef(indexrelid), 
-					pg_size_pretty(hypopg_relation_size(indexrelid)) 
-					FROM hypopg_list_indexes() WHERE indexrelid = $1;`
+		query = `select indexrelid, indexname, hypopg_get_indexdef(indexrelid), 
+			pg_size_pretty(hypopg_relation_size(indexrelid)) 
+			from hypopg_list_indexes() where indexrelid = $1`
 		queryArgs = append(queryArgs, indexID)
 	}
 
@@ -111,7 +132,9 @@ func (h *HypoCmd) describe(indexID string) error {
 		return errors.Wrap(err, "failed to run description query")
 	}
 
-	tableString := querier.RenderTable(res)
+	tableString := &strings.Builder{}
+	tableString.WriteString(HypoPGCaption)
+	querier.RenderTable(tableString, res)
 
 	if err := h.message.Append(tableString.String()); err != nil {
 		return errors.Wrap(err, "failed to publish message")
@@ -125,22 +148,16 @@ func (h *HypoCmd) drop(indexID string) error {
 		return errors.Errorf("failed to drop a hypothetical index: indexrelid required")
 	}
 
-	res, err := querier.DBQuery(h.db, "SELECT * FROM hypopg_drop_index($1);", indexID)
+	_, err := querier.DBQuery(h.db, "select * from hypopg_drop_index($1)", indexID)
 	if err != nil {
 		return errors.Wrap(err, "failed to drop index")
-	}
-
-	tableString := querier.RenderTable(res)
-
-	if err := h.message.Append(tableString.String()); err != nil {
-		return errors.Wrap(err, "failed to publish message")
 	}
 
 	return nil
 }
 
 func (h *HypoCmd) reset() error {
-	err := querier.DBExec(h.db, "SELECT * FROM hypopg_reset();")
+	err := querier.DBExec(h.db, "select * from hypopg_reset()")
 	if err != nil {
 		return errors.Wrap(err, "failed to reset indexes")
 	}

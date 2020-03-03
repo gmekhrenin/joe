@@ -115,6 +115,7 @@ const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, 
 	"• `exec` — execute any query (for example, CREATE INDEX)\n" +
 	"• `reset` — revert the database to the initial state (usually takes less than a minute, :warning: all changes will be lost)\n" +
 	"• `\\d`, `\\d+`, `\\dt`, `\\dt+`, `\\di`, `\\di+`, `\\l`, `\\l+`, `\\dv`, `\\dv+`, `\\dm`, `\\dm+` — psql meta information commands\n" +
+	"• `hypo` — create hypothetical indexes using the HypoPG extension\n" +
 	"• `help` — this message\n"
 
 const MsgSessionStarting = "Starting new session...\n"
