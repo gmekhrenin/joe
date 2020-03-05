@@ -301,9 +301,7 @@ func (b *Bot) RunServer() {
 		b.checkIdleSessions(context.TODO())
 	})
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		b.handleEvent(w, r)
-	})
+	http.HandleFunc("/", b.handleEvent)
 
 	port := b.Config.Port
 	log.Msg(fmt.Sprintf("Server start listening on localhost:%d", port))

@@ -32,3 +32,8 @@ type DBLabInstance struct {
 	DBName  string // TODO(akartasov): Make a dynamically used name.
 	SSLMode string
 }
+
+type SlackConfig struct {
+	AccessToken   string
+	SigningSecret string
+}
