@@ -138,7 +138,7 @@ func main() {
 	}
 
 	messenger := slack2.NewMessenger(chat.Api, slackCfg)
-	assistant := slack2.NewAssistant(slackCfg, messenger, dbLabClient)
+	assistant := slack2.NewAssistant(slackCfg, botCfg, messenger, dbLabClient)
 
 	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
 	joeBot.RunServer(assistant)

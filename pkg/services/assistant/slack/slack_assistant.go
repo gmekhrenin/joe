@@ -15,6 +15,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
+	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
@@ -23,10 +24,17 @@ type Assistant struct {
 	msgProcessor  msgproc.ProcessingService
 }
 
-func NewAssistant(cfg *config.SlackConfig, slackMsg *Messenger, dblab *dblabapi.Client) *Assistant {
+func NewAssistant(cfg *config.SlackConfig, botCfg config.Bot, slackMsg *Messenger, dblab *dblabapi.Client) *Assistant {
 	assistant := &Assistant{
 		ServiceConfig: cfg,
-		msgProcessor:  msgproc.ProcessingService{Messenger: slackMsg, DBLab: dblab},
+		msgProcessor: msgproc.ProcessingService{
+			Messenger: slackMsg,
+			DBLab:     dblab,
+			UserManager: usermanager.UserManager{
+				UserInformer: slackMsg,
+				Config:       botCfg,
+			},
+		},
 	}
 
 	return assistant
