@@ -69,6 +69,14 @@ type UserManager struct {
 	users      map[string]*User // Slack UID -> UserInfo.
 }
 
+func NewUserManager(informer UserInformer, botCfg config.Bot) UserManager {
+	return UserManager{
+		UserInformer: informer,
+		Config:       botCfg,
+		users:        make(map[string]*User),
+	}
+}
+
 func (um *UserManager) CreateUser(userID string) (*User, error) {
 	user, ok := um.findUser(userID)
 	if ok {

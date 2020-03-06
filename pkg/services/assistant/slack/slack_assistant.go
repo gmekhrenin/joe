@@ -30,10 +30,7 @@ func NewAssistant(cfg *config.SlackConfig, botCfg config.Bot, slackMsg *Messenge
 		msgProcessor: msgproc.ProcessingService{
 			Messenger: slackMsg,
 			DBLab:     dblab,
-			UserManager: usermanager.UserManager{
-				UserInformer: slackMsg,
-				Config:       botCfg,
-			},
+			UserManager: usermanager.NewUserManager(slackMsg, botCfg),
 		},
 	}
 
