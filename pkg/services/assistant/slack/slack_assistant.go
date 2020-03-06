@@ -6,7 +6,6 @@ import (
 	"html"
 	"io/ioutil"
 	"net/http"
-	"sync"
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
@@ -15,32 +14,29 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
-	slackmsg "gitlab.com/postgres-ai/joe/pkg/services/messenger/slack"
+	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
 type Assistant struct {
 	ServiceConfig *config.SlackConfig
-	msgProcessor  messenger.ProcessingService
-	Api           *slack.Client // TODO(akartasov): remove, use userManager instead.
-
-	usersMutex sync.RWMutex
-	users      map[string]*structs.User // Slack UID -> User.
+	msgProcessor  msgproc.ProcessingService
 }
 
-func New(cfg *config.SlackConfig, slackMsg *slackmsg.Messenger, dblab *dblabapi.Client, slackClient *slack.Client) *Assistant {
+func NewAssistant(cfg *config.SlackConfig, slackMsg *Messenger, dblab *dblabapi.Client) *Assistant {
 	assistant := &Assistant{
 		ServiceConfig: cfg,
-		msgProcessor:  messenger.ProcessingService{Messenger: slackMsg, DBLab: dblab},
-		Api:           slackClient,
-		users:         make(map[string]*structs.User),
+		msgProcessor:  msgproc.ProcessingService{Messenger: slackMsg, DBLab: dblab},
 	}
 
 	return assistant
 }
 
 func (a *Assistant) Init() error {
+	for path, handleFunc := range a.Handlers() {
+		http.Handle(path, handleFunc)
+	}
+
 	return nil
 }
 
@@ -120,11 +116,6 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *Assistant) GetUserInfo(id string) (*slack.User, error) {
-	log.Dbg("Request: GetUserInfo")
-	return a.Api.GetUserInfo(id)
-}
-
 func (a *Assistant) ParseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, error) {
 	return slackevents.ParseEvent(rawEvent, slackevents.OptionNoVerifyToken())
 }
@@ -156,13 +147,13 @@ func (a *Assistant) VerifyRequest(r *http.Request) error {
 }
 
 func (a *Assistant) processAppMentionEvent(ev *slackevents.AppMentionEvent) {
-	//var err error
+	msg := structs.NewMessage(ev.Channel)
 
-	//msg, _ := a.Api.NewMessage(ev.Channel)
-	//err = msg.Publish("What's up? Send `help` to see the list of available commands.")
-	//if err != nil {
-	//	// TODO(anatoly): Retry.
-	//	log.Err("Bot: Cannot publish a message", err)
-	//	return
-	//}
+	msg.SetText("What's up? Send `help` to see the list of available commands.")
+
+	if err := a.msgProcessor.Messenger.Publish(msg); err != nil {
+		// TODO(anatoly): Retry.
+		log.Err("Bot: Cannot publish a message", err)
+		return
+	}
 }

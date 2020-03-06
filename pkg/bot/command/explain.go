@@ -17,6 +17,8 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
+	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
@@ -29,14 +31,14 @@ const (
 	queryExplainAnalyze = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 )
 
-func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, botCfg config.Bot, db *sql.DB) error {
+func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Message, botCfg config.Bot, db *sql.DB) error {
 	explainConfig := botCfg.Explain
 
 	if apiCmd.Query == "" {
 		return errors.New(MsgExplainOptionReq)
 	}
 
-	cmd := NewPlan(apiCmd, msg, db, chat)
+	cmd := NewPlan(apiCmd, msg, db, msgSvc)
 	msgInitText, isTruncated, err := cmd.explainWithoutExecution()
 	if err != nil {
 		return errors.Wrap(err, "failed to run explain without execution")
@@ -63,21 +65,22 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 
 	planExecPreview, isTruncated := text.CutText(vis, PlanSize, SeparatorPlan)
 
-	err = msg.Replace(msgInitText + chatapi.CHAT_APPEND_SEPARATOR +
-		fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
+	msg.AppendText(msgInitText + chatapi.CHAT_APPEND_SEPARATOR + fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
+	msg.SetMessageType("replace")
+	err = msgSvc.Append(msg)
 	if err != nil {
 		log.Err("Show the plan with execution:", err)
 
 		return err
 	}
 
-	_, err = chat.UploadFile("plan-json", explainAnalyze, msg.ChannelID, msg.Timestamp)
+	_, err = msgSvc.AddArtifact("plan-json", explainAnalyze, msg.ChannelID, msg.MessageID)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err
 	}
 
-	filePlan, err := chat.UploadFile("plan-text", vis, msg.ChannelID, msg.Timestamp)
+	filePlanPermalink, err := msgSvc.AddArtifact("plan-text", vis, msg.ChannelID, msg.MessageID)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return err
@@ -88,9 +91,10 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 		detailsText = " " + CutText
 	}
 
-	err = msg.Append(fmt.Sprintf("<%s|Full execution plan>%s \n"+
-		"_Other artifacts are provided in the thread_",
-		filePlan.Permalink, detailsText))
+	msg.AppendText(fmt.Sprintf("<%s|Full execution plan>%s \n"+
+		"_Other artifacts are provided in the thread_", filePlanPermalink, detailsText))
+
+	err = msgSvc.Append(msg)
 	if err != nil {
 		log.Err("File: ", err)
 		return err
@@ -116,7 +120,8 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 
 	apiCmd.Recommendations = recommends
 
-	if err = msg.Append("*Recommendations:*\n" + recommends); err != nil {
+	msg.AppendText("*Recommendations:*\n" + recommends)
+	if err = msgSvc.Append(msg); err != nil {
 		log.Err("Show recommendations: ", err)
 		return err
 	}
@@ -125,7 +130,8 @@ func Explain(chat *chatapi.Chat, apiCmd *api.ApiCommand, msg *chatapi.Message, b
 	stats := explain.RenderStats()
 	apiCmd.Stats = stats
 
-	if err = msg.Append(fmt.Sprintf("*Summary:*\n```%s```", stats)); err != nil {
+	msg.AppendText(fmt.Sprintf("*Summary:*\n```%s```", stats))
+	if err = msgSvc.Append(msg); err != nil {
 		log.Err("Show summary: ", err)
 		return err
 	}

@@ -34,12 +34,11 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
+	"gitlab.com/postgres-ai/joe/pkg/services/assistant"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -294,14 +293,18 @@ func (b *Bot) checkIdleSessions(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bot) RunServer() {
+func (b *Bot) RunServer(assistantSvc assistant.Assistant) {
 	// Check idle sessions.
 	_ = util.RunInterval(InactiveCloneCheckInterval, func() {
 		log.Dbg("Check idle sessions")
 		b.checkIdleSessions(context.TODO())
 	})
 
-	http.HandleFunc("/", b.handleEvent)
+	if err := assistantSvc.Init(); err != nil {
+		log.Fatal(err)
+	}
+
+	//http.HandleFunc("/", b.handleEvent)
 
 	port := b.Config.Port
 	log.Msg(fmt.Sprintf("Server start listening on localhost:%d", port))
@@ -568,29 +571,29 @@ func (b *Bot) processMessageEvent(ev *slackevents.MessageEvent) {
 
 	// TODO(akartasov): Refactor commands and create retrier.
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
-		switch {
-		case receivedCommand == COMMAND_EXPLAIN:
-			err = command.Explain(b.Chat, apiCmd, msg, b.Config, user.Session.CloneConnection)
-
-		case receivedCommand == COMMAND_PLAN:
-			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, b.Chat)
-			err = planCmd.Execute()
-
-		case receivedCommand == COMMAND_EXEC:
-			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection)
-			err = execCmd.Execute()
-
-		case receivedCommand == COMMAND_RESET:
-			err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
-
-		case receivedCommand == COMMAND_HYPO:
-			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection)
-			err = hypoCmd.Execute()
-
-		case util.Contains(allowedPsqlCommands, receivedCommand):
-			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
-			err = command.Transmit(apiCmd, msg, b.Chat, runner)
-		}
+		//switch {
+		//case receivedCommand == COMMAND_EXPLAIN:
+		//	err = command.Explain(b.Chat, apiCmd, msg, b.Config, user.Session.CloneConnection)
+		//
+		//case receivedCommand == COMMAND_PLAN:
+		//	planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, b.Chat)
+		//	err = planCmd.Execute()
+		//
+		//case receivedCommand == COMMAND_EXEC:
+		//	execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection)
+		//	err = execCmd.Execute()
+		//
+		//case receivedCommand == COMMAND_RESET:
+		//	err = command.ResetSession(context.TODO(), apiCmd, msg, b.DBLab, user.Session.Clone.ID)
+		//
+		//case receivedCommand == COMMAND_HYPO:
+		//	hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection)
+		//	err = hypoCmd.Execute()
+		//
+		//case util.Contains(allowedPsqlCommands, receivedCommand):
+		//	runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
+		//	err = command.Transmit(apiCmd, msg, b.Chat, runner)
+		//}
 
 		if err != nil {
 			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {

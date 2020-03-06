@@ -2,10 +2,12 @@ package slack
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
+	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
@@ -13,6 +15,7 @@ import (
 
 const errorNotPublished = "Message not published yet"
 
+//TODO (akartasov): Add a status-reaction map.
 // Bot reactions.
 const (
 	ReactionRunning = "hourglass_flowing_sand"
@@ -20,12 +23,18 @@ const (
 	ReactionOK      = "white_check_mark"
 )
 
+var statusMapping = map[structs.MessageStatus]string{
+	structs.StatusRunning: ReactionRunning,
+	structs.StatusError:   ReactionError,
+	structs.StatusOK:      ReactionOK,
+}
+
 type Messenger struct {
 	api    *slack.Client
 	config *config.SlackConfig
 }
 
-func New(api *slack.Client, cfg *config.SlackConfig) *Messenger {
+func NewMessenger(api *slack.Client, cfg *config.SlackConfig) *Messenger {
 	return &Messenger{
 		api:    api,
 		config: cfg,
@@ -93,7 +102,7 @@ func (m *Messenger) UpdateStatus(message *structs.Message, status structs.Messag
 	msgRef := slack.NewRefToMessage(message.ChannelID, message.MessageID)
 
 	// Add new reaction.
-	if err := m.api.AddReaction(string(status), msgRef); err != nil {
+	if err := m.api.AddReaction(statusMapping[status], msgRef); err != nil {
 		message.SetStatus("")
 		return err
 	}
@@ -152,9 +161,41 @@ func (m *Messenger) OK(message *structs.Message) error {
 	return nil
 }
 
+func (m *Messenger) AddArtifact(title, explainResult, channelID, messageID string) (string, error) {
+	// TODO (akartasov): Implement.
+	filePlanWoExec, err := m.uploadFile(title, explainResult, channelID, messageID)
+	if err != nil {
+		log.Err("File upload failed:", err)
+		return "", err
+	}
+	return filePlanWoExec.Permalink, nil
+}
+
+func (m *Messenger) uploadFile(title string, content string, channel string, ts string) (*slack.File, error) {
+	filetype := "txt"
+	name := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
+	filename := fmt.Sprintf("%s.%s", name, filetype)
+
+	params := slack.FileUploadParameters{
+		Title:           title,
+		Filetype:        "text",
+		Filename:        filename,
+		Content:         content,
+		Channels:        []string{channel},
+		ThreadTimestamp: ts,
+	}
+
+	file, err := m.api.UploadFile(params)
+	if err != nil {
+		return &slack.File{}, err
+	}
+
+	return file, nil
+}
+
 func (m *Messenger) notifyAboutRequestFinish(message *structs.Message) error {
 	now := time.Now()
-	if message.UserID == "" || now.Before(message.CreatedAt) {
+	if message.UserID == "" || now.Before(message.NotifyAt) {
 		return nil
 	}
 

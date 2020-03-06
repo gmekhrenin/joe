@@ -25,12 +25,13 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	slack2 "gitlab.com/postgres-ai/joe/pkg/services/assistant/slack"
 )
 
 var opts struct {
 	// Chat API.
-	AccessToken       string `short:"t" long:"token" description:"\"Bot User OAuth Access Token\" which starts with \"xoxb-\"" env:"CHAT_TOKEN" required:"true"`
-	SigningSecret     string `long:"signing-secret" description:"The secret confirms that each request comes from Slack by verifying its unique signature." env:"CHAT_SIGNING_SECRET" required:"true"`
+	AccessToken   string `short:"t" long:"token" description:"\"Bot User OAuth Access Token\" which starts with \"xoxb-\"" env:"CHAT_TOKEN" required:"true"`
+	SigningSecret string `long:"signing-secret" description:"The secret confirms that each request comes from Slack by verifying its unique signature." env:"CHAT_SIGNING_SECRET" required:"true"`
 
 	// Database Lab.
 	DBLabURL   string `long:"dblab-url" description:"Database Lab URL" env:"DBLAB_URL" default:"localhost"`
@@ -131,8 +132,16 @@ func main() {
 		log.Fatal("Failed to create a Database Lab client", err)
 	}
 
+	slackCfg := &config.SlackConfig{
+		AccessToken:   opts.AccessToken,
+		SigningSecret: opts.SigningSecret,
+	}
+
+	messenger := slack2.NewMessenger(chat.Api, slackCfg)
+	assistant := slack2.NewAssistant(slackCfg, messenger, dbLabClient)
+
 	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
-	joeBot.RunServer()
+	joeBot.RunServer(assistant)
 }
 
 func parseArgs() ([]string, error) {
