@@ -164,8 +164,8 @@ func (m *Messenger) UpdateStatus(message *structs.Message, status structs.Messag
 	// TODO(anatoly): Remove reaction may fail, in that case we will lose data about added reaction.
 
 	// Remove previous reaction.
-	if message.Status != "" {
-		if err := m.api.RemoveReaction(string(message.Status), msgRef); err != nil {
+	if oldReaction, ok := statusMapping[message.Status]; ok {
+		if err := m.api.RemoveReaction(oldReaction, msgRef); err != nil {
 			return err
 		}
 	}

@@ -111,6 +111,11 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 		case *slackevents.MessageEvent:
 			log.Dbg("Event type: Message")
 
+			if ev.BotID != "" {
+				// Skip messages sent by bots.
+				return
+			}
+
 			msg := a.slackEventToIncomingMessage(ev)
 			a.msgProcessor.ProcessMessageEvent(msg)
 
