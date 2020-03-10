@@ -2,6 +2,8 @@ package slack
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,11 +13,11 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 const errorNotPublished = "Message not published yet"
 
-//TODO (akartasov): Add a status-reaction map.
 // Bot reactions.
 const (
 	ReactionRunning = "hourglass_flowing_sand"
@@ -23,10 +25,23 @@ const (
 	ReactionOK      = "white_check_mark"
 )
 
+// statusMapping defines a status-reaction map.
 var statusMapping = map[structs.MessageStatus]string{
 	structs.StatusRunning: ReactionRunning,
 	structs.StatusError:   ReactionError,
 	structs.StatusOK:      ReactionOK,
+}
+
+// Subtypes of incoming messages.
+const (
+	subtypeGeneral   = ""
+	subtypeFileShare = "file_share"
+)
+
+// supportedSubtypes defines supported message subtypes.
+var supportedSubtypes = []string{
+	subtypeGeneral,
+	subtypeFileShare,
 }
 
 type Messenger struct {
@@ -41,7 +56,30 @@ func NewMessenger(api *slack.Client, cfg *config.SlackConfig) *Messenger {
 	}
 }
 
-func (m *Messenger) Init() error {
+// ValidateIncomingMessage validates an incoming message.
+func (m *Messenger) ValidateIncomingMessage(incomingMessage *structs.IncomingMessage) error {
+	if incomingMessage == nil {
+		return errors.New("input event must not be nil")
+	}
+
+	// Skip messages sent by bots.
+	if incomingMessage.UserID == "" {
+		return errors.New("userID must not be empty")
+	}
+
+	// Skip messages from threads.
+	if incomingMessage.ThreadID != "" {
+		return errors.New("skip message in thread")
+	}
+
+	if !util.Contains(supportedSubtypes, incomingMessage.SubType) {
+		return errors.Errorf("subtype %q is not supported", incomingMessage.SubType)
+	}
+
+	if incomingMessage.ChannelID == "" {
+		return errors.New("bad channelID specified")
+	}
+
 	return nil
 }
 
@@ -191,6 +229,49 @@ func (m *Messenger) uploadFile(title string, content string, channel string, ts 
 	}
 
 	return file, nil
+}
+
+func (m *Messenger) DownloadArtifact(privateUrl string) ([]byte, error) {
+	const (
+		ContentTypeText     = "text/plain"
+		HeaderAuthorization = "Authorization"
+		HeaderContentType   = "Content-Type"
+	)
+
+	log.Dbg("Downloading snippet...")
+
+	req, err := http.NewRequest(http.MethodGet, privateUrl, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot initialize a download snippet request")
+	}
+	req.Header.Set(HeaderAuthorization, fmt.Sprintf("Bearer %s", m.config.AccessToken))
+
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot download snippet")
+	}
+	defer resp.Body.Close()
+
+	snippet, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot read the snippet content")
+	}
+
+	// In case of bad authorization Slack sends HTML page with auth form.
+	// Snippet should have a plain text content type.
+	contentType := resp.Header.Get(HeaderContentType)
+	if resp.StatusCode == http.StatusUnauthorized || !strings.Contains(contentType, ContentTypeText) {
+		return nil, errors.Errorf("unauthorized to download snippet: response code %d", resp.StatusCode)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("cannot download snippet: response code %d", resp.StatusCode)
+	}
+
+	log.Dbg("Snippet downloaded.")
+
+	return snippet, nil
 }
 
 func (m *Messenger) notifyAboutRequestFinish(message *structs.Message) error {

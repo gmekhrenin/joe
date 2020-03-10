@@ -27,7 +27,8 @@ import (
 
 const QUERY_PREVIEW_SIZE = 400
 
-const MSG_HELP = "• `explain` — analyze your query (SELECT, INSERT, DELETE, UPDATE or WITH) and generate recommendations\n" +
+// HelpMessage defines available commands provided with the help message.
+const HelpMessage = "• `explain` — analyze your query (SELECT, INSERT, DELETE, UPDATE or WITH) and generate recommendations\n" +
 	"• `plan` — analyze your query (SELECT, INSERT, DELETE, UPDATE or WITH) without execution\n" +
 	"• `exec` — execute any query (for example, CREATE INDEX)\n" +
 	"• `reset` — revert the database to the initial state (usually takes less than a minute, :warning: all changes will be lost)\n" +

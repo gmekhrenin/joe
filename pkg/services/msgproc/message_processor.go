@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
@@ -92,52 +91,21 @@ type ProcessingService struct {
 	//Limiter
 }
 
-const SUBTYPE_GENERAL = ""
-const SUBTYPE_FILE_SHARE = "file_share"
-
-var supportedSubtypes = []string{
-	SUBTYPE_GENERAL,
-	SUBTYPE_FILE_SHARE,
-}
-
 var spaceRegex = regexp.MustCompile(`\s+`)
 
-func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
-	// TODO(akartasov): Implement.
-	var err error
-
-	// Filter event.
-
-	// Skip messages sent by bots.
-	if ev.User == "" || ev.BotID != "" {
-		log.Dbg("Message filtered: Bot")
-		return
-	}
-
-	// Skip messages from threads.
-	if ev.ThreadTimeStamp != "" {
-		log.Dbg("Message filtered: Message in thread")
-		return
-	}
-
-	if !util.Contains(supportedSubtypes, ev.SubType) {
-		log.Dbg("Message filtered: Subtype not supported")
-		return
-	}
-
-	ch := ev.Channel
-
-	if ch == "" {
-		log.Err("Bad channelID specified")
+func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.IncomingMessage) {
+	// Filter incoming message.
+	if err := s.Messenger.ValidateIncomingMessage(&incomingMessage); err != nil {
+		log.Err(errors.Wrap(err, "incoming message is invalid"))
 		return
 	}
 
 	// Get user or create a new one.
-	user, err := s.UserManager.CreateUser(ev.User)
+	user, err := s.UserManager.CreateUser(incomingMessage.UserID)
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
-		if err := s.Messenger.Fail(structs.NewMessage(ch), err.Error()); err != nil {
+		if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to get user"))
 			return
 		}
@@ -146,34 +114,34 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 	}
 
 	user.Session.LastActionTs = time.Now()
-	if !util.Contains(user.Session.ChannelIDs, ch) {
-		user.Session.ChannelIDs = append(user.Session.ChannelIDs, ch)
+	if !util.Contains(user.Session.ChannelIDs, incomingMessage.ChannelID) {
+		user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
 	}
 
 	// Filter and prepare message.
-	message := strings.TrimSpace(ev.Text)
+	message := strings.TrimSpace(incomingMessage.Text)
 	message = strings.TrimLeft(message, "`")
 	message = strings.TrimRight(message, "`")
 	message = formatMessage(message)
 
-	// TODO (akartasov): Download snippet to message.
 	// Get command from snippet if exists. Snippets allow longer queries support.
-	//files := ev.Files
-	//if len(files) > 0 {
-	//	log.Dbg("Using attached file as message")
-	//	file := files[0]
-	//	snippet, err := s.Chat.DownloadSnippet(file.URLPrivate)
-	//	if err != nil {
-	//		log.Err(err)
-	//
-	//		msg, _ := s.Chat.NewMessage(ch)
-	//		msg.Publish(" ")
-	//		msg.Fail(err.Error())
-	//		return
-	//	}
-	//
-	//	message = string(snippet)
-	//}
+	if incomingMessage.SnippetURL != "" {
+		log.Dbg("Using attached file as message")
+
+		snippet, err := s.Messenger.DownloadArtifact(incomingMessage.SnippetURL)
+		if err != nil {
+			log.Err(err)
+
+			if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+				log.Err(errors.Wrap(err, "failed to download artifact"))
+				return
+			}
+
+			return
+		}
+
+		message = string(snippet)
+	}
 
 	if len(message) == 0 {
 		log.Dbg("Message filtered: Empty")
@@ -192,7 +160,7 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 		query = parts[1]
 	}
 
-	s.showBotHints(ev, receivedCommand, query)
+	s.showBotHints(incomingMessage, receivedCommand, query)
 
 	if !util.Contains(supportedCommands, receivedCommand) {
 		log.Dbg("Message filtered: Not a command")
@@ -202,7 +170,7 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 	if err := user.RequestQuota(); err != nil {
 		log.Err("Quota: ", err)
 
-		if err := s.Messenger.Fail(structs.NewMessage(ch), err.Error()); err != nil {
+		if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to request quotas"))
 			return
 		}
@@ -225,7 +193,7 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 		})
 
 		if err != nil {
-			if err := s.Messenger.Fail(structs.NewMessage(ch), err.Error()); err != nil {
+			if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to marshal Audit struct"))
 				return
 			}
@@ -240,13 +208,13 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 
 	// Show `help` command without initializing of a session.
 	if receivedCommand == COMMAND_HELP {
-		hMsg := structs.NewMessage(ch)
+		msg := structs.NewMessage(incomingMessage.ChannelID)
 
 		msgText = appendHelp(msgText, s.Config.Version)
 		msgText = appendSessionId(msgText, user)
-		hMsg.SetText(msgText)
+		msg.SetText(msgText)
 
-		if err := s.Messenger.Publish(hMsg); err != nil {
+		if err := s.Messenger.Publish(msg); err != nil {
 			// TODO(anatoly): Retry.
 			log.Err("Bot: Cannot publish a message", err)
 		}
@@ -254,12 +222,12 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 		return
 	}
 
-	if err := s.runSession(context.TODO(), user, ch); err != nil {
+	if err := s.runSession(context.TODO(), user, incomingMessage.ChannelID); err != nil {
 		log.Err(err)
 		return
 	}
 
-	msg := structs.NewMessage(ch)
+	msg := structs.NewMessage(incomingMessage.ChannelID)
 
 	msgText = appendSessionId(msgText, user)
 	msg.SetText(msgText)
@@ -284,7 +252,7 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 		SessionId:   user.Session.PlatformSessionId,
 		Command:     receivedCommand,
 		Query:       query,
-		SlackTs:     ev.TimeStamp,
+		SlackTs:     incomingMessage.Timestamp,
 	}
 
 	const maxRetryCounter = 1
@@ -359,7 +327,7 @@ func (s *ProcessingService) ProcessMessageEvent(ev *slackevents.MessageEvent) {
 }
 
 // Show bot usage hints.
-func (s *ProcessingService) showBotHints(ev *slackevents.MessageEvent, command string, query string) {
+func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command string, query string) {
 	parts := strings.SplitN(query, " ", 2)
 	firstQueryWord := strings.ToLower(parts[0])
 
@@ -367,9 +335,9 @@ func (s *ProcessingService) showBotHints(ev *slackevents.MessageEvent, command s
 
 	if (checkQuery && util.Contains(hintExplainDmlWords, firstQueryWord)) ||
 		util.Contains(hintExplainDmlWords, command) {
-		msg := structs.NewMessage(ev.Channel)
+		msg := structs.NewMessage(ev.ChannelID)
 		msg.MessageType = "ephemeral"
-		msg.UserID = ev.User
+		msg.UserID = ev.UserID
 		msg.SetText(HINT_EXPLAIN)
 
 		if err := s.Messenger.Publish(msg); err != nil {
@@ -378,9 +346,9 @@ func (s *ProcessingService) showBotHints(ev *slackevents.MessageEvent, command s
 	}
 
 	if util.Contains(hintExecDdlWords, command) {
-		msg := structs.NewMessage(ev.Channel)
+		msg := structs.NewMessage(ev.ChannelID)
 		msg.MessageType = "ephemeral"
-		msg.UserID = ev.User
+		msg.UserID = ev.UserID
 		msg.SetText(HINT_EXEC)
 
 		if err := s.Messenger.Publish(msg); err != nil {
@@ -425,5 +393,5 @@ func appendSessionId(text string, u *usermanager.User) string {
 }
 
 func appendHelp(text string, version string) string {
-	return text + MSG_HELP + fmt.Sprintf("Version: %s\n", version)
+	return text + HelpMessage + fmt.Sprintf("Version: %s\n", version)
 }

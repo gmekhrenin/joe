@@ -13,7 +13,19 @@ const (
 	StatusOK      = "ok"
 )
 
-// Message struct.
+// IncomingMessage defines a standard representation of incoming events.
+type IncomingMessage struct {
+	SubType     string
+	Text        string
+	SnippetURL  string
+	ChannelID   string
+	ChannelType string
+	UserID      string
+	Timestamp   string
+	ThreadID    string
+}
+
+// Message struct defines an output message.
 type Message struct {
 	MessageID   string
 	MessageType string        // thread, ephemeral
@@ -26,14 +38,14 @@ type Message struct {
 	Text        string // Used to accumulate message text to append new parts by edit.
 }
 
+// MessageStatus defines status of a message.
+type MessageStatus string
+
 func NewMessage(channelID string) *Message {
 	return &Message{
 		ChannelID: channelID,
 	}
 }
-
-// MessageStatus defines status of a message.
-type MessageStatus string
 
 func (m *Message) SetText(text string) {
 	m.Text = text

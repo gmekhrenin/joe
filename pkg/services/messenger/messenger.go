@@ -5,7 +5,7 @@ import (
 )
 
 type Messenger interface {
-	Init() error
+	ValidateIncomingMessage(inputEvent *structs.IncomingMessage) error
 	Publish(message *structs.Message) error // post message: publish, publish ephemeral
 	Append(message *structs.Message) error  // update message: append, replace
 	UpdateStatus(message *structs.Message, status structs.MessageStatus) error
@@ -16,4 +16,5 @@ type Messenger interface {
 
 	//UploadFile("plan-wo-execution-text", explainResult, cmd.message.ChannelID, cmd.message.Timestamp)
 	AddArtifact(string, string, string, string) (string, error)
+	DownloadArtifact(artifactURL string) (response []byte, err error)
 }

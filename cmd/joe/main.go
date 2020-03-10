@@ -25,7 +25,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	slack2 "gitlab.com/postgres-ai/joe/pkg/services/assistant/slack"
+	slackAssistant "gitlab.com/postgres-ai/joe/pkg/services/assistant/slack"
 )
 
 var opts struct {
@@ -67,7 +67,7 @@ var opts struct {
 }
 
 // TODO (akartasov): Set the app version during build.
-const Version = "v0.5.0"
+const Version = "v0.6.0-rc1"
 
 // TODO(anatoly): Refactor configs and envs.
 
@@ -137,8 +137,8 @@ func main() {
 		SigningSecret: opts.SigningSecret,
 	}
 
-	messenger := slack2.NewMessenger(chat.Api, slackCfg)
-	assistant := slack2.NewAssistant(slackCfg, botCfg, messenger, dbLabClient)
+	messenger := slackAssistant.NewMessenger(chat.Api, slackCfg)
+	assistant := slackAssistant.NewAssistant(slackCfg, botCfg, messenger, dbLabClient)
 
 	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
 	joeBot.RunServer(assistant)

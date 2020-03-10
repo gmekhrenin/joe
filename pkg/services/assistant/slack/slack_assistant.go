@@ -28,8 +28,8 @@ func NewAssistant(cfg *config.SlackConfig, botCfg config.Bot, slackMsg *Messenge
 	assistant := &Assistant{
 		ServiceConfig: cfg,
 		msgProcessor: msgproc.ProcessingService{
-			Messenger: slackMsg,
-			DBLab:     dblab,
+			Messenger:   slackMsg,
+			DBLab:       dblab,
 			UserManager: usermanager.NewUserManager(slackMsg, botCfg),
 		},
 	}
@@ -61,7 +61,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.VerifyRequest(r); err != nil {
+	if err := a.verifyRequest(r); err != nil {
 		log.Dbg("Message filtered: Verification failed:", err.Error())
 
 		w.WriteHeader(http.StatusForbidden)
@@ -77,7 +77,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	body := buf.Bytes()
 
-	eventsAPIEvent, err := a.ParseEvent(body)
+	eventsAPIEvent, err := a.parseEvent(body)
 	if err != nil {
 		log.Err("Event parse error:", err)
 
@@ -110,7 +110,9 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 		case *slackevents.MessageEvent:
 			log.Dbg("Event type: Message")
-			a.msgProcessor.ProcessMessageEvent(ev)
+
+			msg := a.slackEventToIncomingMessage(ev)
+			a.msgProcessor.ProcessMessageEvent(msg)
 
 		default:
 			log.Dbg("Event filtered: Inner event type not supported")
@@ -121,12 +123,38 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *Assistant) ParseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, error) {
+// slackEventToIncomingMessage converts a slack message event to the standard incoming message.
+func (a *Assistant) slackEventToIncomingMessage(event *slackevents.MessageEvent) structs.IncomingMessage {
+	inputEvent := structs.IncomingMessage{
+		SubType:     event.SubType,
+		Text:        event.Text,
+		ChannelID:   event.Channel,
+		ChannelType: event.ChannelType,
+		UserID:      event.User,
+		Timestamp:   event.TimeStamp,
+		ThreadID:    event.ThreadTimeStamp,
+	}
+
+	// Skip messages sent by bots.
+	if event.BotID != "" {
+		inputEvent.UserID = ""
+	}
+
+	files := event.Files
+	if len(files) > 0 {
+		inputEvent.SnippetURL = files[0].URLPrivate
+	}
+
+	return inputEvent
+}
+
+// parseEvent parses slack events.
+func (a *Assistant) parseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, error) {
 	return slackevents.ParseEvent(rawEvent, slackevents.OptionNoVerifyToken())
 }
 
-// VerifyRequest verifies a request coming from Slack
-func (a *Assistant) VerifyRequest(r *http.Request) error {
+// verifyRequest verifies a request coming from Slack
+func (a *Assistant) verifyRequest(r *http.Request) error {
 	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.ServiceConfig.SigningSecret)
 	if err != nil {
 		return errors.Wrap(err, "failed to init the secrets verifier")
