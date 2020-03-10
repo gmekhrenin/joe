@@ -86,7 +86,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch eventsAPIEvent.Type {
-	// Used to verified bot's API URL for Slack.
+	// Used to verify bot's API URL for Slack.
 	case slackevents.URLVerification:
 		log.Dbg("Event type: URL verification")
 		var r *slackevents.ChallengeResponse
