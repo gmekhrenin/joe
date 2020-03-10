@@ -244,7 +244,9 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	}
 	msg.SetChatUserID(user.UserInfo.ID)
 
-	s.Messenger.UpdateStatus(msg, structs.StatusRunning)
+	if err := s.Messenger.UpdateStatus(msg, structs.StatusRunning); err != nil {
+		log.Err(err)
+	}
 
 	apiCmd := &api.ApiCommand{
 		AccessToken: s.Config.ApiToken,
@@ -296,7 +298,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 			}
 
 			msg.AppendText("Session was closed by Database Lab.\n")
-			if err := s.Messenger.Append(msg); err != nil {
+			if err := s.Messenger.UpdateText(msg); err != nil {
 				log.Err(fmt.Sprintf("failed to append message on session close: %+v", err))
 			}
 			s.stopSession(user)

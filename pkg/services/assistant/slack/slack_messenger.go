@@ -83,64 +83,79 @@ func (m *Messenger) ValidateIncomingMessage(incomingMessage *structs.IncomingMes
 	return nil
 }
 
+// Message types of published messages.
+const (
+	messageTypeDefault   = ""
+	messageTypeThread    = "thread"
+	messageTypeEphemeral = "ephemeral"
+)
+
 func (m *Messenger) Publish(message *structs.Message) error {
-	channelID, timestamp, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false))
-	if err != nil {
-		return err
+	switch message.MessageType {
+	case messageTypeDefault:
+		_, timestamp, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false))
+		if err != nil {
+			return errors.Wrap(err, "failed to post a message")
+		}
+		//message.ChannelID = channelID // Shouldn't change, but update just in case.
+		message.MessageID = timestamp
+
+	case messageTypeThread:
+		_, _, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false),
+			slack.MsgOptionTS(message.ThreadID))
+		if err != nil {
+			return errors.Wrap(err, "failed to post a thread message")
+		}
+
+	case messageTypeEphemeral:
+		timestamp, err := m.api.PostEphemeral(message.ChannelID, message.UserID, slack.MsgOptionText(message.Text, false))
+		if err != nil {
+			return errors.Wrap(err, "failed to post an ephemeral message")
+		}
+
+		message.MessageID = timestamp
+
+	default:
+		return errors.New("unknown message type")
 	}
-
-	message.ChannelID = channelID // Shouldn't change, but update just in case.
-	message.MessageID = timestamp
-
-	// TODO(akartasov): Support publishing to a thread.
-	//_, _, err := m.Api.PostMessage(m.ChannelID,
-	//	slack.MsgOptionText(text, false),
-	//	slack.MsgOptionTS(threadTimestamp))
-
-	// TODO(akartasov): Support ephemeral messages.
-	//timestamp, err := m.Chat.Api.PostEphemeral(m.ChannelID, userId,
-	//	slack.MsgOptionText(text, false))
 
 	return nil
 }
 
-func (m *Messenger) Append(message *structs.Message) error {
+func (m *Messenger) UpdateText(message *structs.Message) error {
 	if !message.IsPublished() {
-		return fmt.Errorf(errorNotPublished)
+		return errors.New(errorNotPublished)
 	}
 
-	channelId, timestamp, _, err := m.api.UpdateMessage(message.ChannelID,
-		message.MessageID, slack.MsgOptionText(message.Text, false))
+	_, timestamp, _, err := m.api.UpdateMessage(message.ChannelID, message.MessageID, slack.MsgOptionText(message.Text, false))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to update a message")
 	}
 
-	message.ChannelID = channelId // Shouldn't change, but update just in case.
+	//message.ChannelID = channelId // Shouldn't change, but update just in case.
 	message.MessageID = timestamp
-
-	// TODO(akartasov): Support replace messages.
-	//channelId, timestamp, _, err := m.Chat.Api.UpdateMessage(m.ChannelID,
-	//	m.Timestamp, slack.MsgOptionText(text, false))
-	//if err != nil {
-	//	return err
-	//}
 
 	return nil
 }
 
 func (m *Messenger) UpdateStatus(message *structs.Message, status structs.MessageStatus) error {
 	if !message.IsPublished() {
-		return fmt.Errorf(errorNotPublished)
+		return errors.New(errorNotPublished)
 	}
 
 	if status == message.Status {
 		return nil
 	}
 
+	reaction, ok := statusMapping[status]
+	if !ok {
+		return errors.Errorf("unknown status given: %s", status)
+	}
+
 	msgRef := slack.NewRefToMessage(message.ChannelID, message.MessageID)
 
 	// Add new reaction.
-	if err := m.api.AddReaction(statusMapping[status], msgRef); err != nil {
+	if err := m.api.AddReaction(reaction, msgRef); err != nil {
 		message.SetStatus("")
 		return err
 	}
@@ -166,7 +181,7 @@ func (m *Messenger) Fail(message *structs.Message, text string) error {
 
 	if message.IsPublished() {
 		message.AppendText(errText)
-		err = m.Append(message)
+		err = m.UpdateText(message)
 	} else {
 		message.SetText(errText)
 		err = m.Publish(message)
@@ -176,7 +191,7 @@ func (m *Messenger) Fail(message *structs.Message, text string) error {
 		return err
 	}
 
-	if err := m.UpdateStatus(message, ReactionError); err != nil {
+	if err := m.UpdateStatus(message, structs.StatusError); err != nil {
 		return errors.Wrap(err, "failed to update status")
 	}
 
@@ -188,7 +203,7 @@ func (m *Messenger) Fail(message *structs.Message, text string) error {
 }
 
 func (m *Messenger) OK(message *structs.Message) error {
-	if err := m.UpdateStatus(message, ReactionOK); err != nil {
+	if err := m.UpdateStatus(message, structs.StatusOK); err != nil {
 		return errors.Wrap(err, "failed to change reaction")
 	}
 
@@ -200,19 +215,19 @@ func (m *Messenger) OK(message *structs.Message) error {
 }
 
 func (m *Messenger) AddArtifact(title, explainResult, channelID, messageID string) (string, error) {
-	// TODO (akartasov): Implement.
 	filePlanWoExec, err := m.uploadFile(title, explainResult, channelID, messageID)
 	if err != nil {
 		log.Err("File upload failed:", err)
 		return "", err
 	}
+
 	return filePlanWoExec.Permalink, nil
 }
 
 func (m *Messenger) uploadFile(title string, content string, channel string, ts string) (*slack.File, error) {
-	filetype := "txt"
+	const fileType = "txt"
 	name := strings.ToLower(strings.ReplaceAll(title, " ", "-"))
-	filename := fmt.Sprintf("%s.%s", name, filetype)
+	filename := fmt.Sprintf("%s.%s", name, fileType)
 
 	params := slack.FileUploadParameters{
 		Title:           title,
@@ -225,7 +240,7 @@ func (m *Messenger) uploadFile(title string, content string, channel string, ts 
 
 	file, err := m.api.UploadFile(params)
 	if err != nil {
-		return &slack.File{}, err
+		return nil, errors.Wrap(err, "failed to upload a file")
 	}
 
 	return file, nil
@@ -296,10 +311,6 @@ func (m *Messenger) publishToThread(message *structs.Message, text string) error
 		UserID:    message.UserID,
 		Text:      text,
 	}
-
-	//_, _, err := message.Api.PostMessage(message.ChannelID,
-	//	slack.MsgOptionText(text, false),
-	//	slack.MsgOptionTS(threadTimestamp))
 
 	if err := m.Publish(threadMsg); err != nil {
 		return errors.Wrap(err, "failed to publish a user mention")

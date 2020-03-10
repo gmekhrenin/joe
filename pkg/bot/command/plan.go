@@ -79,7 +79,7 @@ func (cmd *PlanCmd) explainWithoutExecution() (string, bool, error) {
 	}
 
 	cmd.message.AppendText(fmt.Sprintf("*Plan%s:*\n```%s```", explainPlanTitle, planPreview))
-	if err := cmd.messenger.Append(cmd.message); err != nil {
+	if err := cmd.messenger.UpdateText(cmd.message); err != nil {
 		log.Err("Show plan: ", err)
 		return "", false, err
 	}
@@ -101,7 +101,7 @@ func (cmd *PlanCmd) explainWithoutExecution() (string, bool, error) {
 			planPreview, isTruncated = text.CutText(explainResultWithoutHypo, PlanSize, SeparatorPlan)
 
 			cmd.message.AppendText(fmt.Sprintf("*Plan without HypoPG indexes:*\n```%s```", planPreview))
-			if err := cmd.messenger.Append(cmd.message); err != nil {
+			if err := cmd.messenger.UpdateText(cmd.message); err != nil {
 				log.Err("Show plan: ", err)
 				return "", false, err
 			}
@@ -116,7 +116,7 @@ func (cmd *PlanCmd) explainWithoutExecution() (string, bool, error) {
 	}
 
 	cmd.message.AppendText(fmt.Sprintf("<%s|Full plan (w/o execution)>%s", permalink, detailsText))
-	err = cmd.messenger.Append(cmd.message)
+	err = cmd.messenger.UpdateText(cmd.message)
 	if err != nil {
 		log.Err("File: ", err)
 		return "", false, err

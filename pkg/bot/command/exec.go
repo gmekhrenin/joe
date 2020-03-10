@@ -59,7 +59,7 @@ func (cmd ExecCmd) Execute() error {
 	cmd.apiCommand.Response = result
 
 	cmd.message.AppendText(result)
-	if err = cmd.messenger.Append(cmd.message); err != nil {
+	if err = cmd.messenger.UpdateText(cmd.message); err != nil {
 		log.Err("Exec:", err)
 		return err
 	}

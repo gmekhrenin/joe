@@ -14,7 +14,6 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
-	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
@@ -65,17 +64,16 @@ func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Me
 
 	planExecPreview, isTruncated := text.CutText(vis, PlanSize, SeparatorPlan)
 
-	msg.AppendText(msgInitText + chatapi.CHAT_APPEND_SEPARATOR + fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
-	msg.SetMessageType("replace")
-	err = msgSvc.Append(msg)
-	if err != nil {
+	msg.SetText(msgInitText)
+	msg.AppendText(fmt.Sprintf("*Plan with execution:*\n```%s```", planExecPreview))
+
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("Show the plan with execution:", err)
 
 		return err
 	}
 
-	_, err = msgSvc.AddArtifact("plan-json", explainAnalyze, msg.ChannelID, msg.MessageID)
-	if err != nil {
+	if _, err := msgSvc.AddArtifact("plan-json", explainAnalyze, msg.ChannelID, msg.MessageID); err != nil {
 		log.Err("File upload failed:", err)
 		return err
 	}
@@ -94,8 +92,7 @@ func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Me
 	msg.AppendText(fmt.Sprintf("<%s|Full execution plan>%s \n"+
 		"_Other artifacts are provided in the thread_", filePlanPermalink, detailsText))
 
-	err = msgSvc.Append(msg)
-	if err != nil {
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("File: ", err)
 		return err
 	}
@@ -121,7 +118,7 @@ func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Me
 	apiCmd.Recommendations = recommends
 
 	msg.AppendText("*Recommendations:*\n" + recommends)
-	if err = msgSvc.Append(msg); err != nil {
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("Show recommendations: ", err)
 		return err
 	}
@@ -131,7 +128,7 @@ func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Me
 	apiCmd.Stats = stats
 
 	msg.AppendText(fmt.Sprintf("*Summary:*\n```%s```", stats))
-	if err = msgSvc.Append(msg); err != nil {
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("Show summary: ", err)
 		return err
 	}

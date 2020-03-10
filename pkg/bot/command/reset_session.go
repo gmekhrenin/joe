@@ -19,7 +19,7 @@ func ResetSession(ctx context.Context, apiCmd *api.ApiCommand, msg *structs.Mess
 	msgSvc messenger.Messenger) error {
 
 	msg.AppendText("Resetting the state of the database...")
-	msgSvc.Append(msg)
+	msgSvc.UpdateText(msg)
 
 	// TODO(anatoly): "zfs rollback" deletes newer snapshots. Users will be able
 	// to jump across snapshots if we solve it.
@@ -32,7 +32,7 @@ func ResetSession(ctx context.Context, apiCmd *api.ApiCommand, msg *structs.Mess
 	apiCmd.Response = result
 
 	msg.AppendText(result)
-	if err := msgSvc.Append(msg); err != nil {
+	if err := msgSvc.UpdateText(msg); err != nil {
 		log.Err("Reset:", err)
 		return err
 	}

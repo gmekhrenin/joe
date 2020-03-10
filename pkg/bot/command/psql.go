@@ -39,7 +39,7 @@ func Transmit(apiCmd *api.ApiCommand, msg *structs.Message, msgSvc messenger.Mes
 	cmdPreview, trnd := text.CutText(cmd, PlanSize, SeparatorPlan)
 
 	msg.AppendText(fmt.Sprintf("*Command output:*\n```%s```", cmdPreview))
-	if err = msgSvc.Append(msg); err != nil {
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("Show command output:", err)
 		return err
 	}
@@ -56,7 +56,7 @@ func Transmit(apiCmd *api.ApiCommand, msg *structs.Message, msgSvc messenger.Mes
 	}
 
 	msg.AppendText(fmt.Sprintf("<%s|Full command output>%s\n", fileCmdPermalink, detailsText))
-	if err = msgSvc.Append(msg); err != nil {
+	if err = msgSvc.UpdateText(msg); err != nil {
 		log.Err("File: ", err)
 		return err
 	}

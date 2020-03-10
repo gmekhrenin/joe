@@ -6,15 +6,17 @@ import (
 
 type Messenger interface {
 	ValidateIncomingMessage(inputEvent *structs.IncomingMessage) error
-	Publish(message *structs.Message) error // post message: publish, publish ephemeral
-	Append(message *structs.Message) error  // update message: append, replace
+	Publish(message *structs.Message) error    // post message: publish, publish ephemeral
+	UpdateText(message *structs.Message) error // update message: append, replace
 	UpdateStatus(message *structs.Message, status structs.MessageStatus) error
-	//Finish(message *structs.Message) error // finish messaging: fail, ok
+	// TODO: Finish(message *structs.Message) error // finish messaging: fail, ok
 	Fail(message *structs.Message, text string) error // finish messaging: fail
-	OK(message *structs.Message) error
-	// finish messaging: ok
+	OK(message *structs.Message) error                // finish messaging: ok
 
-	//UploadFile("plan-wo-execution-text", explainResult, cmd.message.ChannelID, cmd.message.Timestamp)
-	AddArtifact(string, string, string, string) (string, error)
+	ArtifactLoader
+}
+
+type ArtifactLoader interface {
+	AddArtifact(name string, result string, channelID string, messageID string) (artifactLink string, err error)
 	DownloadArtifact(artifactURL string) (response []byte, err error)
 }

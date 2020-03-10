@@ -93,7 +93,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	sMsg.AppendText(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes)*time.Minute,
 		s.Config.Version, clone.Snapshot.DataStateAt))
-	if err := s.Messenger.Append(sMsg); err != nil {
+	if err := s.Messenger.UpdateText(sMsg); err != nil {
 
 		s.Messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message with a foreword")
@@ -127,7 +127,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	}
 
 	sMsg.AppendText(fmt.Sprintf("Session started: `%s`", sessionID))
-	if err := s.Messenger.Append(sMsg); err != nil {
+	if err := s.Messenger.UpdateText(sMsg); err != nil {
 		s.Messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message about session start")
 	}
