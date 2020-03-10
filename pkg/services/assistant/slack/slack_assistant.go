@@ -123,7 +123,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// slackEventToIncomingMessage converts a slack message event to the standard incoming message.
+// slackEventToIncomingMessage converts a Slack message event to the standard incoming message.
 func (a *Assistant) slackEventToIncomingMessage(event *slackevents.MessageEvent) structs.IncomingMessage {
 	inputEvent := structs.IncomingMessage{
 		SubType:     event.SubType,
