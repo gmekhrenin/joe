@@ -11,12 +11,12 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
 func ResetSession(ctx context.Context, apiCmd *api.ApiCommand, msg *structs.Message, dbLab *dblabapi.Client, cloneID string,
-	msgSvc messenger.Messenger) error {
+	msgSvc connection.Messenger) error {
 
 	msg.AppendText("Resetting the state of the database...")
 	msgSvc.UpdateText(msg)

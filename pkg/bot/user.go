@@ -15,7 +15,7 @@ func (b *Bot) createUser(userID string) (*User, error) {
 		return nil, errors.Wrap(err, "failed to get user info")
 	}
 
-	user = NewUser(chatUser, b.Config)
+	user = NewUser(chatUser, b.Config.Quota)
 
 	if err := b.addUser(userID, user); err != nil {
 		return nil, errors.Wrap(err, "failed to add user")

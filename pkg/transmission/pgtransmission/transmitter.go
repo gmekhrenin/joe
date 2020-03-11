@@ -17,7 +17,7 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/services/provision/runners"
 
-	"gitlab.com/postgres-ai/joe/pkg/dblab"
+	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
 const (
@@ -26,11 +26,11 @@ const (
 )
 
 type Transmitter struct {
-	clone      dblab.Clone
+	clone      structs.Clone
 	logEnabled bool
 }
 
-func NewPgTransmitter(clone dblab.Clone, logEnabled bool) *Transmitter {
+func NewPgTransmitter(clone structs.Clone, logEnabled bool) *Transmitter {
 	return &Transmitter{
 		clone:      clone,
 		logEnabled: logEnabled,
@@ -129,11 +129,11 @@ func prepareCommandParam(command string) (string, error) {
 }
 
 // commandEnvString returns a string of environment variables to use.
-func commandEnvString(clone dblab.Clone) string {
+func commandEnvString(clone structs.Clone) string {
 	return fmt.Sprintf("PGPASSWORD=%s PGSSLMODE=%s", clone.Password, clone.SSLMode)
 }
 
-func commandConnString(clone dblab.Clone) string {
+func commandConnString(clone structs.Clone) string {
 	return fmt.Sprintf("--host=%s --port=%s --user=%q --dbname=%q",
 		clone.Host, clone.Port, clone.Username, clone.Name)
 }

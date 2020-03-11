@@ -1,3 +1,7 @@
+/*
+2019 © Postgres.ai
+*/
+
 package structs
 
 import (

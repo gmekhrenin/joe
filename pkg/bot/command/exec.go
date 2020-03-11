@@ -14,7 +14,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
@@ -27,11 +27,11 @@ type ExecCmd struct {
 	apiCommand *api.ApiCommand
 	message    *structs.Message
 	db         *sql.DB
-	messenger  messenger.Messenger
+	messenger  connection.Messenger
 }
 
 // NewExec return a new exec command.
-func NewExec(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, messengerSvc messenger.Messenger) *ExecCmd {
+func NewExec(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, messengerSvc connection.Messenger) *ExecCmd {
 	return &ExecCmd{
 		apiCommand: apiCmd,
 		message:    msg,

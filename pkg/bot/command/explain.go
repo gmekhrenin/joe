@@ -15,8 +15,8 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -30,7 +30,7 @@ const (
 	queryExplainAnalyze = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 )
 
-func Explain(msgSvc messenger.Messenger, apiCmd *api.ApiCommand, msg *structs.Message, botCfg config.Bot, db *sql.DB) error {
+func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *structs.Message, botCfg config.Bot, db *sql.DB) error {
 	explainConfig := botCfg.Explain
 
 	if apiCmd.Query == "" {

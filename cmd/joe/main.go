@@ -10,6 +10,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -24,8 +25,8 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
+	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	slackAssistant "gitlab.com/postgres-ai/joe/pkg/services/assistant/slack"
 )
 
 var opts struct {
@@ -99,10 +100,12 @@ func main() {
 	log.Dbg("git: ", version)
 
 	botCfg := config.Bot{
-		Port:                     opts.ServerPort,
-		Explain:                  explainConfig,
-		QuotaLimit:               opts.QuotaLimit,
-		QuotaInterval:            opts.QuotaInterval,
+		Port:    opts.ServerPort,
+		Explain: explainConfig,
+		Quota: config.Quota{
+			Limit:    opts.QuotaLimit,
+			Interval: opts.QuotaInterval,
+		},
 		AuditEnabled:             opts.AuditEnabled,
 		MinNotifyDurationMinutes: opts.MinNotifyDuration,
 
@@ -132,16 +135,17 @@ func main() {
 		log.Fatal("Failed to create a Database Lab client", err)
 	}
 
-	slackCfg := &config.SlackConfig{
+	slackCfg := &slackConnection.SlackConfig{
 		AccessToken:   opts.AccessToken,
 		SigningSecret: opts.SigningSecret,
 	}
 
-	messenger := slackAssistant.NewMessenger(chat.Api, slackCfg)
-	assistant := slackAssistant.NewAssistant(slackCfg, botCfg, messenger, dbLabClient)
+	messenger := slackConnection.NewMessenger(chat.Api, slackCfg)
+	userInformer := slackConnection.NewUserInformer(chat.Api)
+	assistant := slackConnection.NewAssistant(slackCfg, botCfg, messenger, userInformer, dbLabClient)
 
 	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
-	joeBot.RunServer(assistant)
+	joeBot.RunServer(context.Background(), assistant)
 }
 
 func parseArgs() ([]string, error) {

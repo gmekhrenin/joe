@@ -13,7 +13,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
@@ -38,11 +38,11 @@ type HypoCmd struct {
 	apiCommand *api.ApiCommand
 	message    *structs.Message
 	db         *sql.DB
-	messenger  messenger.Messenger
+	messenger  connection.Messenger
 }
 
 // NewHypo creates a new Hypo command.
-func NewHypo(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, msgSvc messenger.Messenger) *HypoCmd {
+func NewHypo(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, msgSvc connection.Messenger) *HypoCmd {
 	return &HypoCmd{
 		apiCommand: apiCmd,
 		message:    msg,

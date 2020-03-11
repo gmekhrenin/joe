@@ -1,3 +1,8 @@
+/*
+2019 © Postgres.ai
+*/
+
+// Package ee provides the Enterprise features.
 package ee
 
 type Audit struct {

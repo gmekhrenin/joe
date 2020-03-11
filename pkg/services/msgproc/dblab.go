@@ -1,3 +1,8 @@
+/*
+2019 © Postgres.ai
+*/
+
+// Package msgproc provides a service for processing of incoming events.
 package msgproc
 
 import (
@@ -20,7 +25,6 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
@@ -47,10 +51,13 @@ const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe \n" +
 	"\nJoe version: %s.\nSnapshot data state at: %s."
 
-const SEPARATOR_ELLIPSIS = "\n[...SKIP...]\n"
+const SeparatorEllipsis = "\n[...SKIP...]\n"
 
-const HINT_EXPLAIN = "Consider using `explain` command for DML statements. See `help` for details."
-const HINT_EXEC = "Consider using `exec` command for DDL statements. See `help` for details."
+// Hint messages.
+const (
+	HintExplain = "Consider using `explain` command for DML statements. See `help` for details."
+	HintExec    = "Consider using `exec` command for DDL statements. See `help` for details."
+)
 
 const joeUserNamePrefix = "joe_"
 
@@ -79,23 +86,23 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	messageText.WriteString(MsgSessionStarting)
 	sMsg.SetText(messageText.String())
-	s.Messenger.Publish(sMsg)
+	s.messenger.Publish(sMsg)
 	messageText.Reset()
 
-	s.Messenger.UpdateStatus(sMsg, structs.StatusRunning)
+	s.messenger.UpdateStatus(sMsg, structs.StatusRunning)
 
 	clone, err := s.createDBLabClone(ctx, user)
 	if err != nil {
-		s.Messenger.Fail(sMsg, err.Error())
+		s.messenger.Fail(sMsg, err.Error())
 
 		return err
 	}
 
 	sMsg.AppendText(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes)*time.Minute,
 		s.Config.Version, clone.Snapshot.DataStateAt))
-	if err := s.Messenger.UpdateText(sMsg); err != nil {
+	if err := s.messenger.UpdateText(sMsg); err != nil {
 
-		s.Messenger.Fail(sMsg, err.Error())
+		s.messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message with a foreword")
 	}
 
@@ -116,7 +123,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	if s.Config.HistoryEnabled {
 		if err := s.createPlatformSession(user, sMsg.ChannelID); err != nil {
-			s.Messenger.Fail(sMsg, err.Error())
+			s.messenger.Fail(sMsg, err.Error())
 			return err
 		}
 	}
@@ -127,20 +134,20 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	}
 
 	sMsg.AppendText(fmt.Sprintf("Session started: `%s`", sessionID))
-	if err := s.Messenger.UpdateText(sMsg); err != nil {
-		s.Messenger.Fail(sMsg, err.Error())
+	if err := s.messenger.UpdateText(sMsg); err != nil {
+		s.messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message about session start")
 	}
 
-	if err := s.Messenger.OK(sMsg); err != nil {
+	if err := s.messenger.OK(sMsg); err != nil {
 		log.Err(err)
 	}
 
 	return nil
 }
 
-func (s *ProcessingService) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
-	return dblab.Clone{
+func (s *ProcessingService) buildDBLabCloneConn(DBParams *models.Database) structs.Clone {
+	return structs.Clone{
 		Name:     s.Config.DBLab.DBName,
 		Host:     DBParams.Host,
 		Port:     DBParams.Port,
@@ -150,7 +157,7 @@ func (s *ProcessingService) buildDBLabCloneConn(DBParams *models.Database) dblab
 	}
 }
 
-func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
+func initConn(dblabClone structs.Clone) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dblabClone.ConnectionString())
 	if err != nil {
 		log.Err("DB connection:", err)
@@ -162,20 +169,6 @@ func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
 	}
 
 	return db, nil
-}
-
-// isActiveSession checks if current user session is active.
-func (s *ProcessingService) isActiveSession(ctx context.Context, cloneID string) bool {
-	clone, err := s.DBLab.GetClone(ctx, cloneID)
-	if err != nil {
-		return false
-	}
-
-	if clone.Status.Code != models.StatusOK {
-		return false
-	}
-
-	return true
 }
 
 // createDBLabClone creates a new clone.
@@ -265,29 +258,6 @@ func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string
 
 	log.Dbg("API: Create session success", respData.SessionId)
 	return fmt.Sprintf("%d", respData.SessionId), nil
-}
-
-// destroySession destroys a DatabaseLab session.
-func (s *ProcessingService) destroySession(u *usermanager.User) error {
-	log.Dbg("Stopping session...")
-
-	if err := s.DBLab.DestroyClone(context.TODO(), u.Session.Clone.ID); err != nil {
-		return errors.Wrap(err, "failed to destroy clone")
-	}
-
-	s.stopSession(u)
-
-	return nil
-}
-
-func (s *ProcessingService) stopSession(user *usermanager.User) {
-	user.Session.Clone = nil
-	user.Session.ConnParams = dblab.Clone{}
-	user.Session.PlatformSessionId = ""
-
-	if user.Session.CloneConnection != nil {
-		user.Session.CloneConnection.Close()
-	}
 }
 
 func getForeword(idleDuration time.Duration, version, dataStateAt string) string {

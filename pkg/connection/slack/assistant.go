@@ -1,7 +1,13 @@
+/*
+2019 © Postgres.ai
+*/
+
+// package slack provides the Slack implementation of the communication interface.
 package slack
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"html"
 	"io/ioutil"
@@ -20,32 +26,42 @@ import (
 )
 
 type Assistant struct {
-	ServiceConfig *config.SlackConfig
-	msgProcessor  msgproc.ProcessingService
+	slackConfig  *SlackConfig
+	msgProcessor *msgproc.ProcessingService
 }
 
-func NewAssistant(cfg *config.SlackConfig, botCfg config.Bot, slackMsg *Messenger, dblab *dblabapi.Client) *Assistant {
+// SlackConfig defines a slack configuration parameters.
+type SlackConfig struct {
+	AccessToken   string
+	SigningSecret string
+}
+
+// NewAssistant returns a new assistant service.
+func NewAssistant(cfg *SlackConfig, botCfg config.Bot, slackMsg *Messenger, userInformer *UserInformer, dblab *dblabapi.Client) *Assistant {
+	userManager := usermanager.NewUserManager(userInformer, botCfg.Quota)
 	assistant := &Assistant{
-		ServiceConfig: cfg,
-		msgProcessor: msgproc.ProcessingService{
-			Messenger:   slackMsg,
-			DBLab:       dblab,
-			UserManager: usermanager.NewUserManager(slackMsg, botCfg),
-		},
+		slackConfig:  cfg,
+		msgProcessor: msgproc.NewProcessingService(slackMsg, MessageValidator{}, dblab, userManager, botCfg),
 	}
 
 	return assistant
 }
 
+// Init registers assistant handlers.
 func (a *Assistant) Init() error {
-	for path, handleFunc := range a.Handlers() {
+	for path, handleFunc := range a.handlers() {
 		http.Handle(path, handleFunc)
 	}
 
 	return nil
 }
 
-func (a *Assistant) Handlers() map[string]http.HandlerFunc {
+// CheckIdleSessions check the running user sessions for idleness.
+func (a *Assistant) CheckIdleSessions(ctx context.Context) {
+	a.msgProcessor.CheckIdleSessions(ctx)
+}
+
+func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"/": a.handleEvent,
 	}
@@ -106,7 +122,9 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 		switch ev := eventsAPIEvent.InnerEvent.Data.(type) {
 		case *slackevents.AppMentionEvent:
 			log.Dbg("Event type: AppMention")
-			a.processAppMentionEvent(ev)
+
+			msg := a.appMentionEventToIncomingMessage(ev)
+			a.msgProcessor.ProcessAppMentionEvent(msg)
 
 		case *slackevents.MessageEvent:
 			log.Dbg("Event type: Message")
@@ -116,7 +134,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			msg := a.slackEventToIncomingMessage(ev)
+			msg := a.messageEventToIncomingMessage(ev)
 			a.msgProcessor.ProcessMessageEvent(msg)
 
 		default:
@@ -128,8 +146,21 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// slackEventToIncomingMessage converts a Slack message event to the standard incoming message.
-func (a *Assistant) slackEventToIncomingMessage(event *slackevents.MessageEvent) structs.IncomingMessage {
+// appMentionEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
+func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) structs.IncomingMessage {
+	inputEvent := structs.IncomingMessage{
+		Text:      event.Text,
+		ChannelID: event.Channel,
+		UserID:    event.User,
+		Timestamp: event.TimeStamp,
+		ThreadID:  event.ThreadTimeStamp,
+	}
+
+	return inputEvent
+}
+
+// messageEventToIncomingMessage converts a Slack message event to the standard incoming message.
+func (a *Assistant) messageEventToIncomingMessage(event *slackevents.MessageEvent) structs.IncomingMessage {
 	inputEvent := structs.IncomingMessage{
 		SubType:     event.SubType,
 		Text:        event.Text,
@@ -160,7 +191,7 @@ func (a *Assistant) parseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, err
 
 // verifyRequest verifies a request coming from Slack
 func (a *Assistant) verifyRequest(r *http.Request) error {
-	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.ServiceConfig.SigningSecret)
+	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.slackConfig.SigningSecret)
 	if err != nil {
 		return errors.Wrap(err, "failed to init the secrets verifier")
 	}
@@ -182,16 +213,4 @@ func (a *Assistant) verifyRequest(r *http.Request) error {
 	}
 
 	return nil
-}
-
-func (a *Assistant) processAppMentionEvent(ev *slackevents.AppMentionEvent) {
-	msg := structs.NewMessage(ev.Channel)
-
-	msg.SetText("What's up? Send `help` to see the list of available commands.")
-
-	if err := a.msgProcessor.Messenger.Publish(msg); err != nil {
-		// TODO(anatoly): Retry.
-		log.Err("Bot: Cannot publish a message", err)
-		return
-	}
 }

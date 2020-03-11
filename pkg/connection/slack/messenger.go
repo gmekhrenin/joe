@@ -1,3 +1,7 @@
+/*
+2019 © Postgres.ai
+*/
+
 package slack
 
 import (
@@ -11,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
-	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
@@ -46,17 +49,17 @@ var supportedSubtypes = []string{
 
 type Messenger struct {
 	api    *slack.Client
-	config *config.SlackConfig
+	config *SlackConfig
 }
 
-func NewMessenger(api *slack.Client, cfg *config.SlackConfig) *Messenger {
+func NewMessenger(api *slack.Client, cfg *SlackConfig) *Messenger {
 	return &Messenger{
 		api:    api,
 		config: cfg,
 	}
 }
 
-// ValidateIncomingMessage validates an incoming message.
+// Validate validates an incoming message.
 func (m *Messenger) ValidateIncomingMessage(incomingMessage *structs.IncomingMessage) error {
 	if incomingMessage == nil {
 		return errors.New("input event must not be nil")

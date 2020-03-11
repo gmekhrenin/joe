@@ -1,80 +1,43 @@
+/*
+2019 © Postgres.ai
+*/
+
 package usermanager
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
-	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 type UserInformer interface {
 	GetUserInfo(userID string) (structs.UserInfo, error)
 }
 
-type User struct {
-	UserInfo structs.UserInfo
-	Session  bot.UserSession
-}
-
-func NewUser(userInfo structs.UserInfo, cfg config.Bot) *User {
-	user := User{
-		UserInfo: userInfo,
-		Session: bot.UserSession{
-			QuotaTs:       time.Now(),
-			QuotaCount:    0,
-			QuotaLimit:    cfg.QuotaLimit,
-			QuotaInterval: cfg.QuotaInterval,
-			LastActionTs:  time.Now(),
-		},
-	}
-
-	return &user
-}
-
-func (u *User) RequestQuota() error {
-	limit := u.Session.QuotaLimit
-	interval := u.Session.QuotaInterval
-	sAgo := util.SecondsAgo(u.Session.QuotaTs)
-
-	if sAgo < interval {
-		if u.Session.QuotaCount >= limit {
-			return fmt.Errorf(
-				"You have reached the limit of requests per %s (%d). "+
-					"Please wait before trying again.",
-				english.Plural(int(interval), "second", ""),
-				limit)
-		}
-
-		u.Session.QuotaCount++
-		return nil
-	}
-
-	u.Session.QuotaCount = 1
-	u.Session.QuotaTs = time.Now()
-	return nil
-}
-
+// UserManager defines a user manager service.
 type UserManager struct {
 	UserInformer UserInformer
-	Config       config.Bot
+	QuotaConfig  config.Quota
 
 	usersMutex sync.RWMutex
-	users      map[string]*User // Slack UID -> UserInfo.
+	users      map[string]*User // UID -> UserInfo.
 }
 
-func NewUserManager(informer UserInformer, botCfg config.Bot) UserManager {
-	return UserManager{
+func NewUserManager(informer UserInformer, quotaCfg config.Quota) *UserManager {
+	return &UserManager{
 		UserInformer: informer,
-		Config:       botCfg,
+		QuotaConfig:  quotaCfg,
 		users:        make(map[string]*User),
 	}
+}
+
+// Users returns all users.
+func (um *UserManager) Users() map[string]*User {
+	return um.users
 }
 
 func (um *UserManager) CreateUser(userID string) (*User, error) {
@@ -88,7 +51,13 @@ func (um *UserManager) CreateUser(userID string) (*User, error) {
 		return nil, errors.Wrap(err, "failed to get user info")
 	}
 
-	user = NewUser(chatUser, um.Config)
+	quota := Quota{
+		ts:       time.Now(),
+		limit:    um.QuotaConfig.Limit,
+		interval: um.QuotaConfig.Interval,
+	}
+
+	user = NewUser(chatUser, quota)
 
 	if err := um.addUser(userID, user); err != nil {
 		return nil, errors.Wrap(err, "failed to add user")

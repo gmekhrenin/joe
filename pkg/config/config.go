@@ -10,8 +10,7 @@ type Bot struct {
 	ConnStr                  string
 	Port                     uint
 	Explain                  pgexplain.ExplainConfig
-	QuotaLimit               uint
-	QuotaInterval            uint // Seconds.
+	Quota                    Quota
 	AuditEnabled             bool
 	MinNotifyDurationMinutes uint
 
@@ -25,15 +24,16 @@ type Bot struct {
 	Version string
 }
 
+// Quota contains quota configuration parameters.
+type Quota struct {
+	Limit    uint
+	Interval uint // Seconds.
+}
+
 // DBLabInstance contains Database Lab config.
 type DBLabInstance struct {
 	URL     string
 	Token   string
 	DBName  string // TODO(akartasov): Make a dynamically used name.
 	SSLMode string
-}
-
-type SlackConfig struct {
-	AccessToken   string
-	SigningSecret string
 }

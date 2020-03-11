@@ -1,3 +1,7 @@
+/*
+2019 © Postgres.ai
+*/
+
 package msgproc
 
 import (
@@ -16,8 +20,9 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
+	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/ee"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
@@ -82,20 +87,34 @@ var allowedPsqlCommands = []string{
 }
 
 type ProcessingService struct {
-	//msgValidator    MessageEventValidator
-	Messenger messenger.Messenger
-	DBLab     *dblabapi.Client
+	messageValidator connection.MessageValidator
+	messenger        connection.Messenger
+	DBLab            *dblabapi.Client
 	//PlatformManager
-	usermanager.UserManager
+	UserManager *usermanager.UserManager
 	//Auditor
 	//Limiter
+	Config config.Bot
 }
 
 var spaceRegex = regexp.MustCompile(`\s+`)
 
+// NewProcessingService creates a new processing service.
+func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
+	userSvc *usermanager.UserManager, cfg config.Bot) *ProcessingService {
+	return &ProcessingService{
+		messageValidator: msgValidator,
+		messenger:        messengerSvc,
+		DBLab:            dblab,
+		UserManager:      userSvc,
+		Config:           cfg,
+	}
+}
+
+// ProcessMessageEvent replies to a message.
 func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.IncomingMessage) {
 	// Filter incoming message.
-	if err := s.Messenger.ValidateIncomingMessage(&incomingMessage); err != nil {
+	if err := s.messageValidator.Validate(&incomingMessage); err != nil {
 		log.Err(errors.Wrap(err, "incoming message is invalid"))
 		return
 	}
@@ -105,7 +124,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
-		if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to get user"))
 			return
 		}
@@ -128,11 +147,11 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if incomingMessage.SnippetURL != "" {
 		log.Dbg("Using attached file as message")
 
-		snippet, err := s.Messenger.DownloadArtifact(incomingMessage.SnippetURL)
+		snippet, err := s.messenger.DownloadArtifact(incomingMessage.SnippetURL)
 		if err != nil {
 			log.Err(err)
 
-			if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to download artifact"))
 				return
 			}
@@ -170,7 +189,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if err := user.RequestQuota(); err != nil {
 		log.Err("Quota: ", err)
 
-		if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to request quotas"))
 			return
 		}
@@ -181,7 +200,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	// We want to save message height space for more valuable info.
 	queryPreview := strings.ReplaceAll(query, "\n", " ")
 	queryPreview = strings.ReplaceAll(queryPreview, "\t", " ")
-	queryPreview, _ = text.CutText(queryPreview, QUERY_PREVIEW_SIZE, SEPARATOR_ELLIPSIS)
+	queryPreview, _ = text.CutText(queryPreview, QUERY_PREVIEW_SIZE, SeparatorEllipsis)
 
 	if s.Config.AuditEnabled {
 		audit, err := json.Marshal(ee.Audit{
@@ -193,7 +212,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		})
 
 		if err != nil {
-			if err := s.Messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to marshal Audit struct"))
 				return
 			}
@@ -214,7 +233,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		msgText = appendSessionId(msgText, user)
 		msg.SetText(msgText)
 
-		if err := s.Messenger.Publish(msg); err != nil {
+		if err := s.messenger.Publish(msg); err != nil {
 			// TODO(anatoly): Retry.
 			log.Err("Bot: Cannot publish a message", err)
 		}
@@ -232,7 +251,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	msgText = appendSessionId(msgText, user)
 	msg.SetText(msgText)
 
-	if err := s.Messenger.Publish(msg); err != nil {
+	if err := s.messenger.Publish(msg); err != nil {
 		// TODO(anatoly): Retry.
 		log.Err("Bot: Cannot publish a message", err)
 		return
@@ -244,7 +263,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	}
 	msg.SetChatUserID(user.UserInfo.ID)
 
-	if err := s.Messenger.UpdateStatus(msg, structs.StatusRunning); err != nil {
+	if err := s.messenger.UpdateStatus(msg, structs.StatusRunning); err != nil {
 		log.Err(err)
 	}
 
@@ -263,32 +282,32 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
 		switch {
 		case receivedCommand == COMMAND_EXPLAIN:
-			err = command.Explain(s.Messenger, apiCmd, msg, s.Config, user.Session.CloneConnection)
+			err = command.Explain(s.messenger, apiCmd, msg, s.Config, user.Session.CloneConnection)
 
 		case receivedCommand == COMMAND_PLAN:
-			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.Messenger)
+			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = planCmd.Execute()
 
 		case receivedCommand == COMMAND_EXEC:
-			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.Messenger)
+			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = execCmd.Execute()
 
 		case receivedCommand == COMMAND_RESET:
-			err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.Messenger)
+			err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
 
 		case receivedCommand == COMMAND_HYPO:
-			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.Messenger)
+			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
-			err = command.Transmit(apiCmd, msg, s.Messenger, runner)
+			err = command.Transmit(apiCmd, msg, s.messenger, runner)
 		}
 
 		if err != nil {
 			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {
 
-				s.Messenger.Fail(msg, err.Error())
+				s.messenger.Fail(msg, err.Error())
 				apiCmd.Fail(err.Error())
 				return
 			}
@@ -298,7 +317,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 			}
 
 			msg.AppendText("Session was closed by Database Lab.\n")
-			if err := s.Messenger.UpdateText(msg); err != nil {
+			if err := s.messenger.UpdateText(msg); err != nil {
 				log.Err(fmt.Sprintf("failed to append message on session close: %+v", err))
 			}
 			s.stopSession(user)
@@ -317,15 +336,28 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		if err != nil {
 			log.Err(err)
 
-			s.Messenger.Fail(msg, err.Error())
+			s.messenger.Fail(msg, err.Error())
 			return
 		}
 	}
 
-	if err := s.Messenger.OK(msg); err != nil {
+	if err := s.messenger.OK(msg); err != nil {
 		log.Err(err)
 	}
 
+}
+
+// ProcessAppMentionEvent replies to an application mention event.
+func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage structs.IncomingMessage) {
+	msg := structs.NewMessage(incomingMessage.ChannelID)
+
+	msg.SetText("What's up? Send `help` to see the list of available commands.")
+
+	if err := s.messenger.Publish(msg); err != nil {
+		// TODO(anatoly): Retry.
+		log.Err("Bot: Cannot publish a message", err)
+		return
+	}
 }
 
 // Show bot usage hints.
@@ -340,9 +372,9 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 		msg := structs.NewMessage(ev.ChannelID)
 		msg.MessageType = "ephemeral"
 		msg.UserID = ev.UserID
-		msg.SetText(HINT_EXPLAIN)
+		msg.SetText(HintExplain)
 
-		if err := s.Messenger.Publish(msg); err != nil {
+		if err := s.messenger.Publish(msg); err != nil {
 			log.Err("Hint explain:", err)
 		}
 	}
@@ -351,9 +383,9 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 		msg := structs.NewMessage(ev.ChannelID)
 		msg.MessageType = "ephemeral"
 		msg.UserID = ev.UserID
-		msg.SetText(HINT_EXEC)
+		msg.SetText(HintExec)
 
-		if err := s.Messenger.Publish(msg); err != nil {
+		if err := s.messenger.Publish(msg); err != nil {
 			log.Err("Hint exec:", err)
 		}
 	}

@@ -36,9 +36,9 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/dblab"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
-	"gitlab.com/postgres-ai/joe/pkg/services/assistant"
+	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -211,7 +211,7 @@ type UserSession struct {
 	ChannelIDs []string
 
 	Clone           *models.Clone
-	ConnParams      dblab.Clone
+	ConnParams      structs.Clone
 	CloneConnection *sql.DB
 }
 
@@ -225,14 +225,14 @@ func NewBot(cfg config.Bot, chat *chatapi.Chat, dbLab *dblabapi.Client) *Bot {
 	return &bot
 }
 
-func NewUser(chatUser *slack.User, cfg config.Bot) *User {
+func NewUser(chatUser *slack.User, quotaCfg config.Quota) *User {
 	user := User{
 		ChatUser: chatUser,
 		Session: UserSession{
 			QuotaTs:       time.Now(),
 			QuotaCount:    0,
-			QuotaLimit:    cfg.QuotaLimit,
-			QuotaInterval: cfg.QuotaInterval,
+			QuotaLimit:    quotaCfg.Limit,
+			QuotaInterval: quotaCfg.Interval,
 			LastActionTs:  time.Now(),
 		},
 	}
@@ -293,18 +293,16 @@ func (b *Bot) checkIdleSessions(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bot) RunServer(assistantSvc assistant.Assistant) {
-	// Check idle sessions.
-	_ = util.RunInterval(InactiveCloneCheckInterval, func() {
-		log.Dbg("Check idle sessions")
-		b.checkIdleSessions(context.TODO())
-	})
-
+func (b *Bot) RunServer(ctx context.Context, assistantSvc connection.Assistant) {
 	if err := assistantSvc.Init(); err != nil {
 		log.Fatal(err)
 	}
 
-	//http.HandleFunc("/", b.handleEvent)
+	// Check idle sessions.
+	_ = util.RunInterval(InactiveCloneCheckInterval, func() {
+		log.Dbg("Check idle sessions")
+		assistantSvc.CheckIdleSessions(ctx)
+	})
 
 	port := b.Config.Port
 	log.Msg(fmt.Sprintf("Server start listening on localhost:%d", port))
@@ -704,8 +702,8 @@ func (b *Bot) runSession(ctx context.Context, user *User, channelID string) erro
 	return nil
 }
 
-func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
-	return dblab.Clone{
+func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) structs.Clone {
+	return structs.Clone{
 		Name:     b.Config.DBLab.DBName,
 		Host:     DBParams.Host,
 		Port:     DBParams.Port,
@@ -715,7 +713,7 @@ func (b *Bot) buildDBLabCloneConn(DBParams *models.Database) dblab.Clone {
 	}
 }
 
-func initConn(dblabClone dblab.Clone) (*sql.DB, error) {
+func initConn(dblabClone structs.Clone) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dblabClone.ConnectionString())
 	if err != nil {
 		log.Err("DB connection:", err)
@@ -807,7 +805,7 @@ func (b *Bot) destroySession(u *User) error {
 
 func (b *Bot) stopSession(user *User) {
 	user.Session.Clone = nil
-	user.Session.ConnParams = dblab.Clone{}
+	user.Session.ConnParams = structs.Clone{}
 	user.Session.PlatformSessionId = ""
 
 	if user.Session.CloneConnection != nil {

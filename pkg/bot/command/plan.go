@@ -14,7 +14,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
-	"gitlab.com/postgres-ai/joe/pkg/services/messenger"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -27,11 +27,11 @@ type PlanCmd struct {
 	apiCommand *api.ApiCommand
 	message    *structs.Message
 	db         *sql.DB
-	messenger  messenger.Messenger
+	messenger  connection.Messenger
 }
 
 // NewPlan return a new plan command.
-func NewPlan(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, messengerSvc messenger.Messenger) *PlanCmd {
+func NewPlan(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, messengerSvc connection.Messenger) *PlanCmd {
 	return &PlanCmd{
 		apiCommand: apiCmd,
 		message:    msg,
