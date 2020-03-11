@@ -62,6 +62,7 @@ func NewUser(userInfo structs.UserInfo, quota Quota) *User {
 	return &user
 }
 
+// RequestQuota checks a user request limit.
 func (u *User) RequestQuota() error {
 	limit := u.Session.Quota.limit
 	interval := u.Session.Quota.interval

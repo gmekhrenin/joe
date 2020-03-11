@@ -235,8 +235,7 @@ func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string
 		return "", err
 	}
 
-	resp, err := http.Post(s.Config.ApiUrl+"/rpc/joe_session_create",
-		"application/json", bytes.NewBuffer(reqData))
+	resp, err := http.Post(s.Config.ApiUrl+"/rpc/joe_session_create", "application/json", bytes.NewBuffer(reqData))
 	if err != nil {
 		return "", err
 	}
@@ -253,7 +252,7 @@ func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string
 	}
 
 	if len(respData.Code) > 0 || len(respData.Message) > 0 {
-		return "", fmt.Errorf("Error: %v", respData)
+		return "", errors.Errorf("error: %v", respData)
 	}
 
 	log.Dbg("API: Create session success", respData.SessionId)

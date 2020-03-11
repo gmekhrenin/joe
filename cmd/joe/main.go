@@ -17,13 +17,13 @@ import (
 	"path/filepath"
 
 	"github.com/jessevdk/go-flags"
+	"github.com/nlopes/slack"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gopkg.in/yaml.v2"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot"
-	"gitlab.com/postgres-ai/joe/pkg/chatapi"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
@@ -124,7 +124,8 @@ func main() {
 		Version: version,
 	}
 
-	chat := chatapi.NewChat(opts.AccessToken, opts.SigningSecret)
+	//chat := chatapi.NewChat(opts.AccessToken, opts.SigningSecret)
+	chatAPI := slack.New(opts.AccessToken)
 
 	dbLabClient, err := dblabapi.NewClient(dblabapi.Options{
 		Host:              botCfg.DBLab.URL,
@@ -140,11 +141,11 @@ func main() {
 		SigningSecret: opts.SigningSecret,
 	}
 
-	messenger := slackConnection.NewMessenger(chat.Api, slackCfg)
-	userInformer := slackConnection.NewUserInformer(chat.Api)
+	messenger := slackConnection.NewMessenger(chatAPI, slackCfg)
+	userInformer := slackConnection.NewUserInformer(chatAPI)
 	assistant := slackConnection.NewAssistant(slackCfg, botCfg, messenger, userInformer, dbLabClient)
 
-	joeBot := bot.NewBot(botCfg, chat, dbLabClient)
+	joeBot := bot.NewBot(botCfg)
 	joeBot.RunServer(context.Background(), assistant)
 }
 

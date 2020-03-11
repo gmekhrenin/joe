@@ -2,6 +2,7 @@
 2019 © Postgres.ai
 */
 
+// Package command provides assistant commands.
 package command
 
 const PlanSize = 400
