@@ -306,10 +306,11 @@ func (m *Messenger) notifyAboutRequestFinish(message *structs.Message) error {
 
 func (m *Messenger) publishToThread(message *structs.Message, text string) error {
 	threadMsg := &structs.Message{
-		ChannelID: message.ChannelID,
-		ThreadID:  message.MessageID,
-		UserID:    message.UserID,
-		Text:      text,
+		MessageType: messageTypeThread,
+		ChannelID:   message.ChannelID,
+		ThreadID:    message.MessageID,
+		UserID:      message.UserID,
+		Text:        text,
 	}
 
 	if err := m.Publish(threadMsg); err != nil {

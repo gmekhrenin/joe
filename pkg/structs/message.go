@@ -44,6 +44,7 @@ type MessageStatus string
 func NewMessage(channelID string) *Message {
 	return &Message{
 		ChannelID: channelID,
+		CreatedAt: time.Now(),
 	}
 }
 
