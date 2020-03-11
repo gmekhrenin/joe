@@ -124,7 +124,6 @@ func main() {
 		Version: version,
 	}
 
-	//chat := chatapi.NewChat(opts.AccessToken, opts.SigningSecret)
 	chatAPI := slack.New(opts.AccessToken)
 
 	dbLabClient, err := dblabapi.NewClient(dblabapi.Options{
