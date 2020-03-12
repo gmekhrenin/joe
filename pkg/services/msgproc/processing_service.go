@@ -97,7 +97,7 @@ type ProcessingService struct {
 	UserManager      *usermanager.UserManager
 	Config           config.Bot
 
-	// TODO (akartasov): add specific services.
+	// TODO (akartasov): Add specific services.
 	//PlatformManager
 	//Auditor
 	//Limiter
