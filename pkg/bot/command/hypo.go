@@ -28,8 +28,7 @@ const (
 // HypoPGCaption contains caption for rendered tables.
 const HypoPGCaption = "*HypoPG response:*\n"
 
-// nolint
-// hypoPGExceptionMessage  defines an error message on failure of extension initialize.
+// hypoPGExceptionMessage defines an error message on failure of extension initialize.
 const hypoPGExceptionMessage = `:warning: Cannot init the HypoPG extension.
 Make sure that the extension has been installed in your Postgres image for Database Lab: https://postgres.ai/docs/database-lab/supported_databases.
 For a quick start, you can use prepared images: https://hub.docker.com/repository/docker/postgresai/extended-postgres created by *Postgres.ai*, or prepare your own.`
