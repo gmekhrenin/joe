@@ -13,12 +13,12 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/transmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-func Transmit(apiCmd *api.ApiCommand, msg *structs.Message, msgSvc connection.Messenger, runner transmission.Runner) error {
+func Transmit(apiCmd *api.ApiCommand, msg *models.Message, msgSvc connection.Messenger, runner transmission.Runner) error {
 	// See transmission.prepareCommandParam for more comments.
 	if strings.ContainsAny(apiCmd.Query, "\n;\\ ") {
 		err := errors.New("query should not contain semicolons, new lines, spaces, and excess backslashes")

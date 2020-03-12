@@ -6,19 +6,19 @@
 package connection
 
 import (
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // Messenger defines the interface for communication with an assistant.
 type Messenger interface {
 	// Publish describes a method for posting of various type messages.
-	Publish(message *structs.Message) error
+	Publish(message *models.Message) error
 
 	// UpdateText describes a method for updating a message text.
-	UpdateText(message *structs.Message) error
+	UpdateText(message *models.Message) error
 
 	// UpdateStatus describes a method for changing a message status.
-	UpdateStatus(message *structs.Message, status structs.MessageStatus) error
+	UpdateStatus(message *models.Message, status models.MessageStatus) error
 
 	MessageFinalizer
 	ArtifactLoader
@@ -27,17 +27,17 @@ type Messenger interface {
 // MessageValidator defines the interface for message validation.
 type MessageValidator interface {
 	// Validate validates an incoming message.
-	Validate(inputEvent *structs.IncomingMessage) error
+	Validate(inputEvent *models.IncomingMessage) error
 }
 
 // MessageFinalizer finishes a message processing.
 type MessageFinalizer interface {
 	// TODO(akartasov): Group Fail and OK methods to Finish(message *structs.Message) error
 	// Fail finishes a message processing and marks a message as failed.
-	Fail(message *structs.Message, text string) error
+	Fail(message *models.Message, text string) error
 
 	// OK finishes a message processing and marks a message as succeeding.
-	OK(message *structs.Message) error
+	OK(message *models.Message) error
 }
 
 // MessageValidator defines the interface for artifacts management.

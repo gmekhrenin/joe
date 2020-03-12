@@ -12,10 +12,10 @@ import (
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
-	"gitlab.com/postgres-ai/database-lab/pkg/models"
+	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
@@ -69,7 +69,7 @@ func (s *ProcessingService) CheckIdleSessions(ctx context.Context) {
 
 		msgText := "Stopped idle sessions for: " + strings.Join(formattedUserList, ", ")
 
-		msg := structs.NewMessage(channelID)
+		msg := models.NewMessage(channelID)
 		msg.SetText(msgText)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -85,7 +85,7 @@ func (s *ProcessingService) isActiveSession(ctx context.Context, cloneID string)
 		return false
 	}
 
-	if clone.Status.Code != models.StatusOK {
+	if clone.Status.Code != dblabmodels.StatusOK {
 		return false
 	}
 
@@ -94,7 +94,7 @@ func (s *ProcessingService) isActiveSession(ctx context.Context, cloneID string)
 
 func (s *ProcessingService) stopSession(user *usermanager.User) {
 	user.Session.Clone = nil
-	user.Session.ConnParams = structs.Clone{}
+	user.Session.ConnParams = models.Clone{}
 	user.Session.PlatformSessionID = ""
 
 	if user.Session.CloneConnection != nil {

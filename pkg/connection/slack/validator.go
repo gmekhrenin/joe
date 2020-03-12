@@ -7,7 +7,7 @@ package slack
 import (
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
@@ -16,7 +16,7 @@ type MessageValidator struct {
 }
 
 // Validate validates an incoming message.
-func (mv MessageValidator) Validate(incomingMessage *structs.IncomingMessage) error {
+func (mv MessageValidator) Validate(incomingMessage *models.IncomingMessage) error {
 	if incomingMessage == nil {
 		return errors.New("input event must not be nil")
 	}

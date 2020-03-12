@@ -11,12 +11,12 @@ import (
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // UserInformer defines an interface for getting user info.
 type UserInformer interface {
-	GetUserInfo(userID string) (structs.UserInfo, error)
+	GetUserInfo(userID string) (models.UserInfo, error)
 }
 
 // UserManager defines a user manager service.

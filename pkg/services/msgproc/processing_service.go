@@ -25,7 +25,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/ee"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -118,7 +118,7 @@ func NewProcessingService(messengerSvc connection.Messenger, msgValidator connec
 }
 
 // ProcessMessageEvent replies to a message.
-func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.IncomingMessage) {
+func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingMessage) {
 	// Filter incoming message.
 	if err := s.messageValidator.Validate(&incomingMessage); err != nil {
 		log.Err(errors.Wrap(err, "incoming message is invalid"))
@@ -130,7 +130,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
-		if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to get user"))
 			return
 		}
@@ -157,7 +157,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		if err != nil {
 			log.Err(err)
 
-			if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to download artifact"))
 				return
 			}
@@ -197,7 +197,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if err := user.RequestQuota(); err != nil {
 		log.Err("Quota: ", err)
 
-		if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to request quotas"))
 			return
 		}
@@ -220,7 +220,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		})
 
 		if err != nil {
-			if err := s.messenger.Fail(structs.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to marshal Audit struct"))
 				return
 			}
@@ -235,7 +235,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 
 	// Show `help` command without initializing of a session.
 	if receivedCommand == CommandHelp {
-		msg := structs.NewMessage(incomingMessage.ChannelID)
+		msg := models.NewMessage(incomingMessage.ChannelID)
 
 		msgText = appendHelp(msgText, s.Config.Version)
 		msgText = appendSessionID(msgText, user)
@@ -254,7 +254,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 		return
 	}
 
-	msg := structs.NewMessage(incomingMessage.ChannelID)
+	msg := models.NewMessage(incomingMessage.ChannelID)
 
 	msgText = appendSessionID(msgText, user)
 	msg.SetText(msgText)
@@ -272,7 +272,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 
 	msg.SetUserID(user.UserInfo.ID)
 
-	if err := s.messenger.UpdateStatus(msg, structs.StatusRunning); err != nil {
+	if err := s.messenger.UpdateStatus(msg, models.StatusRunning); err != nil {
 		log.Err(err)
 	}
 
@@ -355,8 +355,8 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 }
 
 // ProcessAppMentionEvent replies to an application mention event.
-func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage structs.IncomingMessage) {
-	msg := structs.NewMessage(incomingMessage.ChannelID)
+func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage models.IncomingMessage) {
+	msg := models.NewMessage(incomingMessage.ChannelID)
 
 	msg.SetText("What's up? Send `help` to see the list of available commands.")
 
@@ -368,7 +368,7 @@ func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage structs.Incom
 }
 
 // Show bot usage hints.
-func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command string, query string) {
+func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command string, query string) {
 	parts := strings.SplitN(query, " ", 2)
 	firstQueryWord := strings.ToLower(parts[0])
 
@@ -376,8 +376,8 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 
 	if (checkQuery && util.Contains(hintExplainDmlWords, firstQueryWord)) ||
 		util.Contains(hintExplainDmlWords, command) {
-		msg := structs.NewMessage(ev.ChannelID)
-		msg.SetMessageType(structs.MessageTypeEphemeral)
+		msg := models.NewMessage(ev.ChannelID)
+		msg.SetMessageType(models.MessageTypeEphemeral)
 		msg.SetUserID(ev.UserID)
 		msg.SetText(HintExplain)
 
@@ -387,8 +387,8 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 	}
 
 	if util.Contains(hintExecDdlWords, command) {
-		msg := structs.NewMessage(ev.ChannelID)
-		msg.SetMessageType(structs.MessageTypeEphemeral)
+		msg := models.NewMessage(ev.ChannelID)
+		msg.SetMessageType(models.MessageTypeEphemeral)
 		msg.SetUserID(ev.UserID)
 		msg.SetText(HintExec)
 

@@ -23,7 +23,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // Assistant provides a service for interaction with a communication channel.
@@ -153,8 +153,8 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // appMentionEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
-func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) structs.IncomingMessage {
-	inputEvent := structs.IncomingMessage{
+func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) models.IncomingMessage {
+	inputEvent := models.IncomingMessage{
 		Text:      event.Text,
 		ChannelID: event.Channel,
 		UserID:    event.User,
@@ -166,8 +166,8 @@ func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMenti
 }
 
 // messageEventToIncomingMessage converts a Slack message event to the standard incoming message.
-func (a *Assistant) messageEventToIncomingMessage(event *slackevents.MessageEvent) structs.IncomingMessage {
-	inputEvent := structs.IncomingMessage{
+func (a *Assistant) messageEventToIncomingMessage(event *slackevents.MessageEvent) models.IncomingMessage {
+	inputEvent := models.IncomingMessage{
 		SubType:     event.SubType,
 		Text:        event.Text,
 		ChannelID:   event.Channel,

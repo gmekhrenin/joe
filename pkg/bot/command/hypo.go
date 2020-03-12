@@ -14,7 +14,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // Hypo sub-commands
@@ -36,13 +36,13 @@ For a quick start, you can use prepared images: https://hub.docker.com/repositor
 // HypoCmd defines a hypo command.
 type HypoCmd struct {
 	apiCommand *api.ApiCommand
-	message    *structs.Message
+	message    *models.Message
 	db         *sql.DB
 	messenger  connection.Messenger
 }
 
 // NewHypo creates a new Hypo command.
-func NewHypo(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, msgSvc connection.Messenger) *HypoCmd {
+func NewHypo(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) *HypoCmd {
 	return &HypoCmd{
 		apiCommand: apiCmd,
 		message:    msg,

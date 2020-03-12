@@ -8,7 +8,7 @@ import (
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // UserInformer provides a service for getting user info.
@@ -24,13 +24,13 @@ func NewUserInformer(api *slack.Client) *UserInformer {
 }
 
 // GetUserInfo retrieves user info by ID.
-func (m *UserInformer) GetUserInfo(userID string) (structs.UserInfo, error) {
+func (m *UserInformer) GetUserInfo(userID string) (models.UserInfo, error) {
 	slackUser, err := m.api.GetUserInfo(userID)
 	if err != nil {
-		return structs.UserInfo{}, errors.Wrap(err, "failed to get user info")
+		return models.UserInfo{}, errors.Wrap(err, "failed to get user info")
 	}
 
-	user := structs.UserInfo{
+	user := models.UserInfo{
 		ID:       slackUser.ID,
 		Name:     slackUser.Name,
 		RealName: slackUser.RealName,

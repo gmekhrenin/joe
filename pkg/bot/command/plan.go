@@ -15,7 +15,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
@@ -25,13 +25,13 @@ const MsgPlanOptionReq = "Use `plan` to see the query's plan without execution, 
 // PlanCmd defines the plan command.
 type PlanCmd struct {
 	apiCommand *api.ApiCommand
-	message    *structs.Message
+	message    *models.Message
 	db         *sql.DB
 	messenger  connection.Messenger
 }
 
 // NewPlan return a new plan command.
-func NewPlan(apiCmd *api.ApiCommand, msg *structs.Message, db *sql.DB, messengerSvc connection.Messenger) *PlanCmd {
+func NewPlan(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *PlanCmd {
 	return &PlanCmd{
 		apiCommand: apiCmd,
 		message:    msg,

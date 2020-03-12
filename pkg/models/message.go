@@ -2,7 +2,7 @@
 2019 © Postgres.ai
 */
 
-package structs
+package models
 
 import (
 	"errors"

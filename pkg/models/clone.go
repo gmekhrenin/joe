@@ -3,7 +3,7 @@
 */
 
 // Package structs provides domain entities.
-package structs
+package models
 
 import "fmt"
 

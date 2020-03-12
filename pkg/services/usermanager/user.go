@@ -12,15 +12,15 @@ import (
 	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/database-lab/pkg/models"
+	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
 // User defines user info and session.
 type User struct {
-	UserInfo structs.UserInfo
+	UserInfo models.UserInfo
 	Session  UserSession
 }
 
@@ -35,8 +35,8 @@ type UserSession struct {
 
 	ChannelIDs []string
 
-	Clone           *models.Clone
-	ConnParams      structs.Clone
+	Clone           *dblabmodels.Clone
+	ConnParams      models.Clone
 	CloneConnection *sql.DB
 }
 
@@ -49,7 +49,7 @@ type Quota struct {
 }
 
 // NewUser creates a new User.
-func NewUser(userInfo structs.UserInfo, quota Quota) *User {
+func NewUser(userInfo models.UserInfo, quota Quota) *User {
 	ts := time.Now()
 
 	user := User{

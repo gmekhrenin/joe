@@ -16,7 +16,7 @@ import (
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
@@ -30,10 +30,10 @@ const (
 )
 
 // statusMapping defines a status-reaction map.
-var statusMapping = map[structs.MessageStatus]string{
-	structs.StatusRunning: ReactionRunning,
-	structs.StatusError:   ReactionError,
-	structs.StatusOK:      ReactionOK,
+var statusMapping = map[models.MessageStatus]string{
+	models.StatusRunning: ReactionRunning,
+	models.StatusError:   ReactionError,
+	models.StatusOK:      ReactionOK,
 }
 
 // Subtypes of incoming messages.
@@ -63,7 +63,7 @@ func NewMessenger(api *slack.Client, cfg *SlackConfig) *Messenger {
 }
 
 // ValidateIncomingMessage validates an incoming message.
-func (m *Messenger) ValidateIncomingMessage(incomingMessage *structs.IncomingMessage) error {
+func (m *Messenger) ValidateIncomingMessage(incomingMessage *models.IncomingMessage) error {
 	if incomingMessage == nil {
 		return errors.New("input event must not be nil")
 	}
@@ -90,9 +90,9 @@ func (m *Messenger) ValidateIncomingMessage(incomingMessage *structs.IncomingMes
 }
 
 // Publish posts messages.
-func (m *Messenger) Publish(message *structs.Message) error {
+func (m *Messenger) Publish(message *models.Message) error {
 	switch message.MessageType {
-	case structs.MessageTypeDefault:
+	case models.MessageTypeDefault:
 		_, timestamp, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false))
 		if err != nil {
 			return errors.Wrap(err, "failed to post a message")
@@ -100,14 +100,14 @@ func (m *Messenger) Publish(message *structs.Message) error {
 
 		message.MessageID = timestamp
 
-	case structs.MessageTypeThread:
+	case models.MessageTypeThread:
 		_, _, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false),
 			slack.MsgOptionTS(message.ThreadID))
 		if err != nil {
 			return errors.Wrap(err, "failed to post a thread message")
 		}
 
-	case structs.MessageTypeEphemeral:
+	case models.MessageTypeEphemeral:
 		timestamp, err := m.api.PostEphemeral(message.ChannelID, message.UserID, slack.MsgOptionText(message.Text, false))
 		if err != nil {
 			return errors.Wrap(err, "failed to post an ephemeral message")
@@ -123,7 +123,7 @@ func (m *Messenger) Publish(message *structs.Message) error {
 }
 
 // UpdateText updates a message text.
-func (m *Messenger) UpdateText(message *structs.Message) error {
+func (m *Messenger) UpdateText(message *models.Message) error {
 	if !message.IsPublished() {
 		return errors.New(errorNotPublished)
 	}
@@ -139,7 +139,7 @@ func (m *Messenger) UpdateText(message *structs.Message) error {
 }
 
 // UpdateStatus updates message reactions.
-func (m *Messenger) UpdateStatus(message *structs.Message, status structs.MessageStatus) error {
+func (m *Messenger) UpdateStatus(message *models.Message, status models.MessageStatus) error {
 	if !message.IsPublished() {
 		return errors.New(errorNotPublished)
 	}
@@ -177,7 +177,7 @@ func (m *Messenger) UpdateStatus(message *structs.Message, status structs.Messag
 }
 
 // Fail finishes the communication and marks message as failed.
-func (m *Messenger) Fail(message *structs.Message, text string) error {
+func (m *Messenger) Fail(message *models.Message, text string) error {
 	var err error
 
 	errText := fmt.Sprintf("ERROR: %s", text)
@@ -194,7 +194,7 @@ func (m *Messenger) Fail(message *structs.Message, text string) error {
 		return err
 	}
 
-	if err := m.UpdateStatus(message, structs.StatusError); err != nil {
+	if err := m.UpdateStatus(message, models.StatusError); err != nil {
 		return errors.Wrap(err, "failed to update status")
 	}
 
@@ -206,8 +206,8 @@ func (m *Messenger) Fail(message *structs.Message, text string) error {
 }
 
 // OK finishes the communication and marks message as succeeding.
-func (m *Messenger) OK(message *structs.Message) error {
-	if err := m.UpdateStatus(message, structs.StatusOK); err != nil {
+func (m *Messenger) OK(message *models.Message) error {
+	if err := m.UpdateStatus(message, models.StatusOK); err != nil {
 		return errors.Wrap(err, "failed to change reaction")
 	}
 
@@ -298,7 +298,7 @@ func (m *Messenger) DownloadArtifact(privateURL string) ([]byte, error) {
 	return snippet, nil
 }
 
-func (m *Messenger) notifyAboutRequestFinish(message *structs.Message) error {
+func (m *Messenger) notifyAboutRequestFinish(message *models.Message) error {
 	now := time.Now()
 	if message.UserID == "" || now.Before(message.NotifyAt) {
 		return nil
@@ -313,9 +313,9 @@ func (m *Messenger) notifyAboutRequestFinish(message *structs.Message) error {
 	return nil
 }
 
-func (m *Messenger) publishToThread(message *structs.Message, text string) error {
-	threadMsg := &structs.Message{
-		MessageType: structs.MessageTypeThread,
+func (m *Messenger) publishToThread(message *models.Message, text string) error {
+	threadMsg := &models.Message{
+		MessageType: models.MessageTypeThread,
 		ChannelID:   message.ChannelID,
 		ThreadID:    message.MessageID,
 		UserID:      message.UserID,

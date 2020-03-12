@@ -23,11 +23,11 @@ import (
 
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi/types"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
-	"gitlab.com/postgres-ai/database-lab/pkg/models"
+	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
-	"gitlab.com/postgres-ai/joe/pkg/structs"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // HelpMessage defines available commands provided with the help message.
@@ -78,7 +78,7 @@ var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
 
 // runSession starts a user session if not exists.
 func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.User, channelID string) error {
-	sMsg := structs.NewMessage(channelID)
+	sMsg := models.NewMessage(channelID)
 
 	messageText := strings.Builder{}
 
@@ -94,7 +94,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	s.messenger.Publish(sMsg)
 	messageText.Reset()
 
-	s.messenger.UpdateStatus(sMsg, structs.StatusRunning)
+	s.messenger.UpdateStatus(sMsg, models.StatusRunning)
 
 	clone, err := s.createDBLabClone(ctx, user)
 	if err != nil {
@@ -153,8 +153,8 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	return nil
 }
 
-func (s *ProcessingService) buildDBLabCloneConn(dbParams *models.Database) structs.Clone {
-	return structs.Clone{
+func (s *ProcessingService) buildDBLabCloneConn(dbParams *dblabmodels.Database) models.Clone {
+	return models.Clone{
 		Name:     s.Config.DBLab.DBName,
 		Host:     dbParams.Host,
 		Port:     dbParams.Port,
@@ -164,7 +164,7 @@ func (s *ProcessingService) buildDBLabCloneConn(dbParams *models.Database) struc
 	}
 }
 
-func initConn(dblabClone structs.Clone) (*sql.DB, error) {
+func initConn(dblabClone models.Clone) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dblabClone.ConnectionString())
 	if err != nil {
 		log.Err("DB connection:", err)
@@ -179,7 +179,7 @@ func initConn(dblabClone structs.Clone) (*sql.DB, error) {
 }
 
 // createDBLabClone creates a new clone.
-func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermanager.User) (*models.Clone, error) {
+func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermanager.User) (*dblabmodels.Clone, error) {
 	pwd, err := password.Generate(PasswordLength, PasswordMinDigits, PasswordMinSymbols, false, true)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate a password to a new clone")
@@ -201,7 +201,7 @@ func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermana
 	}
 
 	if clone.Snapshot == nil {
-		clone.Snapshot = &models.Snapshot{}
+		clone.Snapshot = &dblabmodels.Snapshot{}
 	}
 
 	clone.DB.Password = pwd
