@@ -26,8 +26,8 @@ import (
 	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
 // HelpMessage defines available commands provided with the help message.
@@ -126,7 +126,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	user.Session.Clone = clone
 	user.Session.CloneConnection = db
 
-	if s.Config.HistoryEnabled {
+	if s.Config.Platform.HistoryEnabled {
 		if err := s.createPlatformSession(user, sMsg.ChannelID); err != nil {
 			s.messenger.Fail(sMsg, err.Error())
 			return err
@@ -187,7 +187,7 @@ func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermana
 
 	clientRequest := types.CloneCreateRequest{
 		ID:        "joe-" + xid.New().String(),
-		Project:   s.Config.ApiProject,
+		Project:   s.Config.Platform.Project,
 		Protected: false,
 		DB: &types.DatabaseRequest{
 			Username: joeUserNamePrefix + user.UserInfo.Name,
@@ -232,8 +232,8 @@ func (s *ProcessingService) APICreatePlatformSession(uid string, username string
 	log.Dbg("API: Create session")
 
 	reqData, err := json.Marshal(&api.ApiSession{
-		ProjectName:   s.Config.ApiProject,
-		AccessToken:   s.Config.ApiToken,
+		ProjectName:   s.Config.Platform.Project,
+		AccessToken:   s.Config.Platform.Token,
 		SlackUid:      uid,
 		SlackUsername: username,
 		SlackChannel:  channel,
@@ -242,7 +242,7 @@ func (s *ProcessingService) APICreatePlatformSession(uid string, username string
 		return "", err
 	}
 
-	resp, err := http.Post(s.Config.ApiUrl+"/rpc/joe_session_create", "application/json", bytes.NewBuffer(reqData))
+	resp, err := http.Post(s.Config.Platform.URL+"/rpc/joe_session_create", "application/json", bytes.NewBuffer(reqData))
 	if err != nil {
 		return "", err
 	}

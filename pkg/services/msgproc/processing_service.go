@@ -277,8 +277,8 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 
 	apiCmd := &api.ApiCommand{
-		AccessToken: s.Config.ApiToken,
-		ApiURL:      s.Config.ApiUrl,
+		AccessToken: s.Config.Platform.Token,
+		ApiURL:      s.Config.Platform.URL,
 		SessionId:   user.Session.PlatformSessionID,
 		Command:     receivedCommand,
 		Query:       query,
@@ -340,7 +340,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		break
 	}
 
-	if s.Config.HistoryEnabled {
+	if s.Config.Platform.HistoryEnabled {
 		if _, err := apiCmd.Post(); err != nil {
 			log.Err(err)
 			s.messenger.Fail(msg, err.Error())

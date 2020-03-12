@@ -19,9 +19,10 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/nlopes/slack"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v2"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
-	"gopkg.in/yaml.v2"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
@@ -47,10 +48,10 @@ var opts struct {
 	MinNotifyDuration uint `long:"min-notify-duration" description:"a time interval (in minutes) to notify a user about the finish of a long query" env:"MIN_NOTIFY_DURATION" default:"1"`
 
 	// Platform.
-	ApiUrl         string `long:"api-url" description:"Postgres.ai platform API base URL" env:"API_URL" default:"https://postgres.ai/api/general"`
-	ApiToken       string `long:"api-token" description:"Postgres.ai platform API token" env:"API_TOKEN"`
-	ApiProject     string `long:"api-project" description:"Postgres.ai platform project to assign user sessions" env:"API_PROJECT"`
-	HistoryEnabled bool   `long:"history-enabled" description:"send command and queries history to Postgres.ai platform for collaboration and visualization" env:"HISTORY_ENABLED"`
+	PlatformURL     string `long:"api-url" description:"Postgres.ai platform API base URL" env:"API_URL" default:"https://postgres.ai/api/general"` // nolint:lll
+	PlatformToken   string `long:"api-token" description:"Postgres.ai platform API token" env:"API_TOKEN"`
+	PlatformProject string `long:"api-project" description:"Postgres.ai platform project to assign user sessions" env:"API_PROJECT"`
+	HistoryEnabled  bool   `long:"history-enabled" description:"send command and queries history to Postgres.ai platform for collaboration and visualization" env:"HISTORY_ENABLED"` // nolint:lll
 
 	// Dev.
 	DevGitCommitHash string `long:"git-commit-hash" env:"GIT_COMMIT_HASH" default:""`
@@ -116,10 +117,12 @@ func main() {
 			SSLMode: opts.SSLMode,
 		},
 
-		ApiUrl:         opts.ApiUrl,
-		ApiToken:       opts.ApiToken,
-		ApiProject:     opts.ApiProject,
-		HistoryEnabled: opts.HistoryEnabled,
+		Platform: config.Platform{
+			URL:            opts.PlatformURL,
+			Token:          opts.PlatformToken,
+			Project:        opts.PlatformProject,
+			HistoryEnabled: opts.HistoryEnabled,
+		},
 
 		Version: version,
 	}

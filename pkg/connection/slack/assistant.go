@@ -21,9 +21,9 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
-	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 // Assistant provides a service for interaction with a communication channel.
