@@ -144,7 +144,7 @@ func main() {
 	userInformer := slackConnection.NewUserInformer(chatAPI)
 	assistant := slackConnection.NewAssistant(slackCfg, botCfg, messenger, userInformer, dbLabClient)
 
-	joeBot := bot.NewBot(botCfg)
+	joeBot := bot.NewApp(botCfg)
 	joeBot.RunServer(context.Background(), assistant)
 }
 

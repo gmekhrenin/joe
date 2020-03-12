@@ -20,6 +20,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/xid"
 	"github.com/sethvargo/go-password/password"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi/types"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
@@ -28,8 +29,6 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
-
-const QUERY_PREVIEW_SIZE = 400
 
 // HelpMessage defines available commands provided with the help message.
 const HelpMessage = "• `explain` — analyze your query (SELECT, INSERT, DELETE, UPDATE or WITH) and generate recommendations\n" +
@@ -40,8 +39,10 @@ const HelpMessage = "• `explain` — analyze your query (SELECT, INSERT, DELET
 	"• `hypo` — create hypothetical indexes using the HypoPG extension\n" +
 	"• `help` — this message\n"
 
+// MsgSessionStarting provides a message for a session start.
 const MsgSessionStarting = "Starting new session...\n"
 
+// MsgSessionForewordTpl provides a template of session foreword message.
 const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\n" +
 	"• Sessions are fully independent. Feel free to do anything.\n" +
 	"• The session will be destroyed after %s of inactivity.\n" +
@@ -51,7 +52,11 @@ const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe \n" +
 	"\nJoe version: %s.\nSnapshot data state at: %s."
 
+// SeparatorEllipsis provides a separator for cut messages.
 const SeparatorEllipsis = "\n[...SKIP...]\n"
+
+// QueryPreviewSize defines a max preview size of query in message.
+const QueryPreviewSize = 400
 
 // Hint messages.
 const (
@@ -100,8 +105,8 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	sMsg.AppendText(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes)*time.Minute,
 		s.Config.Version, clone.Snapshot.DataStateAt))
-	if err := s.messenger.UpdateText(sMsg); err != nil {
 
+	if err := s.messenger.UpdateText(sMsg); err != nil {
 		s.messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message with a foreword")
 	}
@@ -129,11 +134,13 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	}
 
 	sessionID := user.Session.Clone.ID
-	if user.Session.PlatformSessionId != "" {
-		sessionID = user.Session.PlatformSessionId
+
+	if user.Session.PlatformSessionID != "" {
+		sessionID = user.Session.PlatformSessionID
 	}
 
 	sMsg.AppendText(fmt.Sprintf("Session started: `%s`", sessionID))
+
 	if err := s.messenger.UpdateText(sMsg); err != nil {
 		s.messenger.Fail(sMsg, err.Error())
 		return errors.Wrap(err, "failed to append message about session start")
@@ -146,13 +153,13 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	return nil
 }
 
-func (s *ProcessingService) buildDBLabCloneConn(DBParams *models.Database) structs.Clone {
+func (s *ProcessingService) buildDBLabCloneConn(dbParams *models.Database) structs.Clone {
 	return structs.Clone{
 		Name:     s.Config.DBLab.DBName,
-		Host:     DBParams.Host,
-		Port:     DBParams.Port,
-		Username: DBParams.Username,
-		Password: DBParams.Password,
+		Host:     dbParams.Host,
+		Port:     dbParams.Port,
+		Username: dbParams.Username,
+		Password: dbParams.Password,
 		SSLMode:  s.Config.DBLab.SSLMode,
 	}
 }
@@ -204,7 +211,7 @@ func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermana
 
 // createPlatformSession starts a new platform session.
 func (s *ProcessingService) createPlatformSession(user *usermanager.User, channelID string) error {
-	sessionID, err := s.ApiCreatePlatformSession(user.UserInfo.ID, user.UserInfo.Name, channelID)
+	sessionID, err := s.APICreatePlatformSession(user.UserInfo.ID, user.UserInfo.Name, channelID)
 	if err != nil {
 		log.Err("API: Create platform session:", err)
 
@@ -215,13 +222,13 @@ func (s *ProcessingService) createPlatformSession(user *usermanager.User, channe
 		return errors.Wrap(err, "failed to create a platform session")
 	}
 
-	user.Session.PlatformSessionId = sessionID
+	user.Session.PlatformSessionID = sessionID
 
 	return nil
 }
 
-// ApiCreatePlatformSession makes an HTTP request to create a new platform session.
-func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string, channel string) (string, error) {
+// APICreatePlatformSession makes an HTTP request to create a new platform session.
+func (s *ProcessingService) APICreatePlatformSession(uid string, username string, channel string) (string, error) {
 	log.Dbg("API: Create session")
 
 	reqData, err := json.Marshal(&api.ApiSession{
@@ -246,8 +253,8 @@ func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string
 	}
 
 	respData := api.ApiCreateSessionResp{}
-	err = json.Unmarshal(bodyBytes, &respData)
-	if err != nil {
+
+	if err := json.Unmarshal(bodyBytes, &respData); err != nil {
 		return "", err
 	}
 
@@ -256,6 +263,7 @@ func (s *ProcessingService) ApiCreatePlatformSession(uid string, username string
 	}
 
 	log.Dbg("API: Create session success", respData.SessionId)
+
 	return fmt.Sprintf("%d", respData.SessionId), nil
 }
 

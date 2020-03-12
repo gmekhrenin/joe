@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
@@ -29,72 +30,77 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
-const COMMAND_EXPLAIN = "explain"
-const COMMAND_EXEC = "exec"
-const COMMAND_RESET = "reset"
-const COMMAND_HELP = "help"
-const COMMAND_HYPO = "hypo"
-const COMMAND_PLAN = "plan"
+// Constants declare supported commands.
+const (
+	CommandExplain = "explain"
+	CommandExec    = "exec"
+	CommandReset   = "reset"
+	CommandHelp    = "help"
+	CommandHypo    = "hypo"
+	CommandPlan    = "plan"
 
-const COMMAND_PSQL_D = `\d`
-const COMMAND_PSQL_DP = `\d+`
-const COMMAND_PSQL_DT = `\dt`
-const COMMAND_PSQL_DTP = `\dt+`
-const COMMAND_PSQL_DI = `\di`
-const COMMAND_PSQL_DIP = `\di+`
-const COMMAND_PSQL_L = `\l`
-const COMMAND_PSQL_LP = `\l+`
-const COMMAND_PSQL_DV = `\dv`
-const COMMAND_PSQL_DVP = `\dv+`
-const COMMAND_PSQL_DM = `\dm`
-const COMMAND_PSQL_DMP = `\dm+`
+	CommandPsqlD   = `\d`
+	CommandPsqlDP  = `\d+`
+	CommandPsqlDT  = `\dt`
+	CommandPsqlDTP = `\dt+`
+	CommandPsqlDI  = `\di`
+	CommandPsqlDIP = `\di+`
+	CommandPsqlL   = `\l`
+	CommandPsqlLP  = `\l+`
+	CommandPsqlDV  = `\dv`
+	CommandPsqlDVP = `\dv+`
+	CommandPsqlDM  = `\dm`
+	CommandPsqlDMP = `\dm+`
+)
 
 var supportedCommands = []string{
-	COMMAND_EXPLAIN,
-	COMMAND_PLAN,
-	COMMAND_HYPO,
-	COMMAND_EXEC,
-	COMMAND_RESET,
-	COMMAND_HELP,
+	CommandExplain,
+	CommandPlan,
+	CommandHypo,
+	CommandExec,
+	CommandReset,
+	CommandHelp,
 
-	COMMAND_PSQL_D,
-	COMMAND_PSQL_DP,
-	COMMAND_PSQL_DT,
-	COMMAND_PSQL_DTP,
-	COMMAND_PSQL_DI,
-	COMMAND_PSQL_DIP,
-	COMMAND_PSQL_L,
-	COMMAND_PSQL_LP,
-	COMMAND_PSQL_DV,
-	COMMAND_PSQL_DVP,
-	COMMAND_PSQL_DM,
-	COMMAND_PSQL_DMP,
+	CommandPsqlD,
+	CommandPsqlDP,
+	CommandPsqlDT,
+	CommandPsqlDTP,
+	CommandPsqlDI,
+	CommandPsqlDIP,
+	CommandPsqlL,
+	CommandPsqlLP,
+	CommandPsqlDV,
+	CommandPsqlDVP,
+	CommandPsqlDM,
+	CommandPsqlDMP,
 }
 
 var allowedPsqlCommands = []string{
-	COMMAND_PSQL_D,
-	COMMAND_PSQL_DP,
-	COMMAND_PSQL_DT,
-	COMMAND_PSQL_DTP,
-	COMMAND_PSQL_DI,
-	COMMAND_PSQL_DIP,
-	COMMAND_PSQL_L,
-	COMMAND_PSQL_LP,
-	COMMAND_PSQL_DV,
-	COMMAND_PSQL_DVP,
-	COMMAND_PSQL_DM,
-	COMMAND_PSQL_DMP,
+	CommandPsqlD,
+	CommandPsqlDP,
+	CommandPsqlDT,
+	CommandPsqlDTP,
+	CommandPsqlDI,
+	CommandPsqlDIP,
+	CommandPsqlL,
+	CommandPsqlLP,
+	CommandPsqlDV,
+	CommandPsqlDVP,
+	CommandPsqlDM,
+	CommandPsqlDMP,
 }
 
 type ProcessingService struct {
 	messageValidator connection.MessageValidator
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
+	UserManager      *usermanager.UserManager
+	Config           config.Bot
+
+	// TODO (akartasov): add specific services.
 	//PlatformManager
-	UserManager *usermanager.UserManager
 	//Auditor
 	//Limiter
-	Config config.Bot
 }
 
 var spaceRegex = regexp.MustCompile(`\s+`)
@@ -170,12 +176,14 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	// Replace any number of spaces, tab, new lines with single space.
 	message = spaceRegex.ReplaceAllString(message, " ")
 
+	const messageParts = 2
+
 	// Message: "command query(optional)".
-	parts := strings.SplitN(message, " ", 2)
+	parts := strings.SplitN(message, " ", messageParts)
 	receivedCommand := strings.ToLower(parts[0])
 
 	query := ""
-	if len(parts) > 1 {
+	if len(parts) >= messageParts {
 		query = parts[1]
 	}
 
@@ -200,11 +208,11 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	// We want to save message height space for more valuable info.
 	queryPreview := strings.ReplaceAll(query, "\n", " ")
 	queryPreview = strings.ReplaceAll(queryPreview, "\t", " ")
-	queryPreview, _ = text.CutText(queryPreview, QUERY_PREVIEW_SIZE, SeparatorEllipsis)
+	queryPreview, _ = text.CutText(queryPreview, QueryPreviewSize, SeparatorEllipsis)
 
 	if s.Config.AuditEnabled {
 		audit, err := json.Marshal(ee.Audit{
-			Id:       user.UserInfo.ID,
+			ID:       user.UserInfo.ID,
 			Name:     user.UserInfo.Name,
 			RealName: user.UserInfo.RealName,
 			Command:  receivedCommand,
@@ -226,11 +234,11 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	msgText := fmt.Sprintf("```%s %s```\n", receivedCommand, queryPreview)
 
 	// Show `help` command without initializing of a session.
-	if receivedCommand == COMMAND_HELP {
+	if receivedCommand == CommandHelp {
 		msg := structs.NewMessage(incomingMessage.ChannelID)
 
 		msgText = appendHelp(msgText, s.Config.Version)
-		msgText = appendSessionId(msgText, user)
+		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -248,7 +256,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 
 	msg := structs.NewMessage(incomingMessage.ChannelID)
 
-	msgText = appendSessionId(msgText, user)
+	msgText = appendSessionID(msgText, user)
 	msg.SetText(msgText)
 
 	if err := s.messenger.Publish(msg); err != nil {
@@ -258,10 +266,11 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	}
 
 	remindDuration := time.Duration(s.Config.MinNotifyDurationMinutes) * time.Minute
-	if err := msg.SetLongRunningTimestamp(remindDuration); err != nil {
+	if err := msg.SetNotifyAt(remindDuration); err != nil {
 		log.Err(err)
 	}
-	msg.SetChatUserID(user.UserInfo.ID)
+
+	msg.SetUserID(user.UserInfo.ID)
 
 	if err := s.messenger.UpdateStatus(msg, structs.StatusRunning); err != nil {
 		log.Err(err)
@@ -270,7 +279,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	apiCmd := &api.ApiCommand{
 		AccessToken: s.Config.ApiToken,
 		ApiURL:      s.Config.ApiUrl,
-		SessionId:   user.Session.PlatformSessionId,
+		SessionId:   user.Session.PlatformSessionID,
 		Command:     receivedCommand,
 		Query:       query,
 		SlackTs:     incomingMessage.Timestamp,
@@ -281,21 +290,21 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	// TODO(akartasov): Refactor commands and create retrier.
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
 		switch {
-		case receivedCommand == COMMAND_EXPLAIN:
+		case receivedCommand == CommandExplain:
 			err = command.Explain(s.messenger, apiCmd, msg, s.Config, user.Session.CloneConnection)
 
-		case receivedCommand == COMMAND_PLAN:
+		case receivedCommand == CommandPlan:
 			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = planCmd.Execute()
 
-		case receivedCommand == COMMAND_EXEC:
+		case receivedCommand == CommandExec:
 			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = execCmd.Execute()
 
-		case receivedCommand == COMMAND_RESET:
+		case receivedCommand == CommandReset:
 			err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
 
-		case receivedCommand == COMMAND_HYPO:
+		case receivedCommand == CommandHypo:
 			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
 
@@ -306,9 +315,9 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 
 		if err != nil {
 			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {
-
 				s.messenger.Fail(msg, err.Error())
 				apiCmd.Fail(err.Error())
+
 				return
 			}
 
@@ -332,11 +341,10 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	}
 
 	if s.Config.HistoryEnabled {
-		_, err := apiCmd.Post()
-		if err != nil {
+		if _, err := apiCmd.Post(); err != nil {
 			log.Err(err)
-
 			s.messenger.Fail(msg, err.Error())
+
 			return
 		}
 	}
@@ -344,7 +352,6 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage structs.Incoming
 	if err := s.messenger.OK(msg); err != nil {
 		log.Err(err)
 	}
-
 }
 
 // ProcessAppMentionEvent replies to an application mention event.
@@ -365,13 +372,13 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 	parts := strings.SplitN(query, " ", 2)
 	firstQueryWord := strings.ToLower(parts[0])
 
-	checkQuery := len(firstQueryWord) > 0 && command == COMMAND_EXEC
+	checkQuery := len(firstQueryWord) > 0 && command == CommandExec
 
 	if (checkQuery && util.Contains(hintExplainDmlWords, firstQueryWord)) ||
 		util.Contains(hintExplainDmlWords, command) {
 		msg := structs.NewMessage(ev.ChannelID)
-		msg.MessageType = "ephemeral"
-		msg.UserID = ev.UserID
+		msg.SetMessageType(structs.MessageTypeEphemeral)
+		msg.SetUserID(ev.UserID)
 		msg.SetText(HintExplain)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -381,8 +388,8 @@ func (s *ProcessingService) showBotHints(ev structs.IncomingMessage, command str
 
 	if util.Contains(hintExecDdlWords, command) {
 		msg := structs.NewMessage(ev.ChannelID)
-		msg.MessageType = "ephemeral"
-		msg.UserID = ev.UserID
+		msg.SetMessageType(structs.MessageTypeEphemeral)
+		msg.SetUserID(ev.UserID)
 		msg.SetText(HintExec)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -409,18 +416,18 @@ func formatMessage(msg string) string {
 	return msg
 }
 
-func appendSessionId(text string, u *usermanager.User) string {
+func appendSessionID(text string, u *usermanager.User) string {
 	s := "No session\n"
 
 	if u != nil && u.Session.Clone != nil && u.Session.Clone.ID != "" {
-		sessionId := u.Session.Clone.ID
+		sessionID := u.Session.Clone.ID
 
 		// Use session ID from platform if it's defined.
-		if u.Session.PlatformSessionId != "" {
-			sessionId = u.Session.PlatformSessionId
+		if u.Session.PlatformSessionID != "" {
+			sessionID = u.Session.PlatformSessionID
 		}
 
-		s = fmt.Sprintf("Session: `%s`\n", sessionId)
+		s = fmt.Sprintf("Session: `%s`\n", sessionID)
 	}
 
 	return text + s

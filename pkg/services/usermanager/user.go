@@ -7,10 +7,11 @@ package usermanager
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
+	"github.com/pkg/errors"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/structs"
@@ -25,7 +26,7 @@ type User struct {
 
 // UserSession defines a user session.
 type UserSession struct {
-	PlatformSessionId string
+	PlatformSessionID string
 
 	Quota Quota
 
@@ -70,11 +71,8 @@ func (u *User) RequestQuota() error {
 
 	if sAgo < interval {
 		if u.Session.Quota.count >= limit {
-			return fmt.Errorf(
-				"You have reached the limit of requests per %s (%d). "+
-					"Please wait before trying again.",
-				english.Plural(int(interval), "second", ""),
-				limit)
+			return errors.Errorf("You have reached the limit of requests per %s (%d). Please wait before trying again",
+				english.Plural(int(interval), "second", ""), limit)
 		}
 
 		u.Session.Quota.count++
@@ -83,5 +81,6 @@ func (u *User) RequestQuota() error {
 
 	u.Session.Quota.count = 1
 	u.Session.Quota.ts = time.Now()
+
 	return nil
 }

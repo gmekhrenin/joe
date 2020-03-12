@@ -14,6 +14,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
+// UserInformer defines an interface for getting user info.
 type UserInformer interface {
 	GetUserInfo(userID string) (structs.UserInfo, error)
 }
@@ -27,6 +28,7 @@ type UserManager struct {
 	users      map[string]*User // UID -> UserInfo.
 }
 
+// NewUserManager creates a new user manager.
 func NewUserManager(informer UserInformer, quotaCfg config.Quota) *UserManager {
 	return &UserManager{
 		UserInformer: informer,
@@ -40,6 +42,7 @@ func (um *UserManager) Users() map[string]*User {
 	return um.users
 }
 
+// CreateUser creates a new user.
 func (um *UserManager) CreateUser(userID string) (*User, error) {
 	user, ok := um.findUser(userID)
 	if ok {

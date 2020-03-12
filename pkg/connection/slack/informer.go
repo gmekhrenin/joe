@@ -11,17 +11,19 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
+// UserInformer provides a service for getting user info.
 type UserInformer struct {
-	api    *slack.Client
-	config *SlackConfig
+	api *slack.Client
 }
 
+// NewUserInformer creates a new UserInformer service.
 func NewUserInformer(api *slack.Client) *UserInformer {
 	return &UserInformer{
 		api: api,
 	}
 }
 
+// GetUserInfo retrieves user info by ID.
 func (m *UserInformer) GetUserInfo(userID string) (structs.UserInfo, error) {
 	slackUser, err := m.api.GetUserInfo(userID)
 	if err != nil {

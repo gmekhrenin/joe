@@ -79,6 +79,7 @@ func (cmd *PlanCmd) explainWithoutExecution() (string, bool, error) {
 	}
 
 	cmd.message.AppendText(fmt.Sprintf("*Plan%s:*\n```%s```", explainPlanTitle, planPreview))
+
 	if err := cmd.messenger.UpdateText(cmd.message); err != nil {
 		log.Err("Show plan: ", err)
 		return "", false, err

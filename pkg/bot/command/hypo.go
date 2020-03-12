@@ -58,6 +58,7 @@ func (h *HypoCmd) Execute() error {
 	if err := h.initExtension(); err != nil {
 		if pqError, ok := err.(*pq.Error); ok && pqError.Code == querier.SystemPQErrorCodeUndefinedFile {
 			h.message.AppendText(hypoPGExceptionMessage)
+
 			if err := h.messenger.UpdateText(h.message); err != nil {
 				return errors.Wrap(err, "failed to publish message")
 			}
@@ -112,8 +113,8 @@ func (h *HypoCmd) create() error {
 	tableString := &strings.Builder{}
 	tableString.WriteString(HypoPGCaption)
 	querier.RenderTable(tableString, res)
-
 	h.message.AppendText(tableString.String())
+
 	if err := h.messenger.UpdateText(h.message); err != nil {
 		return errors.Wrap(err, "failed to publish message")
 	}

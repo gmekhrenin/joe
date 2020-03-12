@@ -16,6 +16,7 @@ import (
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
@@ -25,6 +26,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/structs"
 )
 
+// Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
 	slackConfig  *SlackConfig
 	msgProcessor *msgproc.ProcessingService
@@ -79,38 +81,42 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 
 	if err := a.verifyRequest(r); err != nil {
 		log.Dbg("Message filtered: Verification failed:", err.Error())
-
 		w.WriteHeader(http.StatusForbidden)
+
 		return
 	}
 
 	buf := new(bytes.Buffer)
 	if _, err := buf.ReadFrom(r.Body); err != nil {
 		log.Err("Failed to read the request body:", err)
-
 		w.WriteHeader(http.StatusBadRequest)
+
 		return
 	}
+
 	body := buf.Bytes()
 
 	eventsAPIEvent, err := a.parseEvent(body)
 	if err != nil {
 		log.Err("Event parse error:", err)
-
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return
 	}
 
+	// TODO (akartasov): event processing function.
 	switch eventsAPIEvent.Type {
 	// Used to verify bot's API URL for Slack.
 	case slackevents.URLVerification:
 		log.Dbg("Event type: URL verification")
+
 		var r *slackevents.ChallengeResponse
 
 		err := json.Unmarshal(body, &r)
 		if err != nil {
 			log.Err("Challenge parse error:", err)
 			w.WriteHeader(http.StatusInternalServerError)
+
 			return
 		}
 

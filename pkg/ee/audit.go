@@ -5,8 +5,9 @@
 // Package ee provides the Enterprise features.
 package ee
 
+// Audit represents audit log actions.
 type Audit struct {
-	Id       string `json:"id"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	RealName string `json:"realName"`
 	Command  string `json:"command"`

@@ -5,12 +5,21 @@
 package structs
 
 import (
+	"errors"
 	"time"
 )
 
 // ChatAppendSeparator separates appended part of a message.
 const ChatAppendSeparator = "\n\n"
 
+// Message types of published messages.
+const (
+	MessageTypeDefault = iota
+	MessageTypeThread
+	MessageTypeEphemeral
+)
+
+// Message status.
 const (
 	StatusRunning = "running"
 	StatusError   = "error"
@@ -32,19 +41,20 @@ type IncomingMessage struct {
 // Message struct defines an output message.
 type Message struct {
 	MessageID   string
-	MessageType string        // thread, ephemeral
-	Status      MessageStatus // fail, success, wait: use for reactions as well.
+	MessageType int
+	Status      MessageStatus
 	ChannelID   string
 	ThreadID    string
 	UserID      string
+	Text        string
 	CreatedAt   time.Time
 	NotifyAt    time.Time
-	Text        string // Used to accumulate message text to append new parts by edit.
 }
 
 // MessageStatus defines status of a message.
 type MessageStatus string
 
+// NewMessage creates a new message.
 func NewMessage(channelID string) *Message {
 	return &Message{
 		ChannelID: channelID,
@@ -52,46 +62,43 @@ func NewMessage(channelID string) *Message {
 	}
 }
 
+// SetText sets text to the message.
 func (m *Message) SetText(text string) {
 	m.Text = text
 }
 
+// AppendText appends a new string to the current text throw a chat append separator.
 func (m *Message) AppendText(text string) {
 	m.Text = m.Text + ChatAppendSeparator + text
 }
 
-func (m *Message) SetMessageType(messageType string) {
+// SetMessageType sets a message type.
+func (m *Message) SetMessageType(messageType int) {
 	m.MessageType = messageType
 }
 
+// SetStatus sets message status.
 func (m *Message) SetStatus(status MessageStatus) {
 	m.Status = status
 }
 
-func (m *Message) SetChatUserID(chatUserID string) {
-	m.UserID = chatUserID
+// SetUserID sets a user ID of the message.
+func (m *Message) SetUserID(userID string) {
+	m.UserID = userID
 }
 
-func (m *Message) SetLongRunningTimestamp(notificationTimeout time.Duration) error {
+// SetNotifyAt sets timestamp to notify a user about the finish of a long query.
+func (m *Message) SetNotifyAt(notificationTimeout time.Duration) error {
 	if m.CreatedAt.IsZero() {
-		return nil
+		return errors.New("createdAt timestamp required")
 	}
-
-	// TODO (akartasov): check the logic.
-	// Parse timestamp with microseconds.
-	//parsedTimestamp, err := strconv.ParseInt(strings.Replace(m.MessageID, ".", "", -1), 10, 64)
-	//if err != nil {
-	//	return errors.Wrap(err, "failed to parse message timestamp")
-	//}
-	//
-	//// Convert microseconds to time.
-	//messageTimestamp := time.Unix(parsedTimestamp/1000000, 0)
 
 	m.NotifyAt = m.CreatedAt.Add(notificationTimeout)
 
 	return nil
 }
 
+// IsPublished checks if the message is already published.
 func (m *Message) IsPublished() bool {
 	return m.ChannelID != "" && m.MessageID != ""
 }

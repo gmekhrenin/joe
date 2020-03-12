@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/models"
 
@@ -18,6 +19,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
+// CheckIdleSessions checks user idleness sessions and notifies about their finishing.
 func (s *ProcessingService) CheckIdleSessions(ctx context.Context) {
 	channelsToNotify := make(map[string][]string)
 
@@ -93,7 +95,7 @@ func (s *ProcessingService) isActiveSession(ctx context.Context, cloneID string)
 func (s *ProcessingService) stopSession(user *usermanager.User) {
 	user.Session.Clone = nil
 	user.Session.ConnParams = structs.Clone{}
-	user.Session.PlatformSessionId = ""
+	user.Session.PlatformSessionID = ""
 
 	if user.Session.CloneConnection != nil {
 		user.Session.CloneConnection.Close()

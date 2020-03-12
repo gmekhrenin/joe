@@ -18,19 +18,23 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
 
+// InactiveCloneCheckInterval defines an interval for check of idleness sessions.
 const InactiveCloneCheckInterval = time.Minute
 
+// App defines a application struct.
 type App struct {
 	Config config.Bot
 }
 
-func NewBot(cfg config.Bot) *App {
+// Creates a new application.
+func NewApp(cfg config.Bot) *App {
 	bot := App{
 		Config: cfg,
 	}
 	return &bot
 }
 
+// RunServer starts a server for message processing.
 func (b *App) RunServer(ctx context.Context, assistantSvc connection.Assistant) {
 	if err := assistantSvc.Init(); err != nil {
 		log.Fatal(err)
