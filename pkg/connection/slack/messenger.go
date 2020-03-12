@@ -134,7 +134,6 @@ func (m *Messenger) UpdateText(message *structs.Message) error {
 		return errors.Wrap(err, "failed to update a message")
 	}
 
-	//message.ChannelID = channelId // Shouldn't change, but update just in case.
 	message.MessageID = timestamp
 
 	return nil
