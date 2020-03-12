@@ -119,7 +119,7 @@ func prepareCommandParam(command string) (string, error) {
 	// Remove all backslashes except the one in the beginning.
 	command = string(command[0]) + strings.ReplaceAll(command[1:], "\\", "")
 
-	// Semi-column creates possibility to run consequent command.
+	// Semicolon creates possibility to run consequent command.
 	command = strings.ReplaceAll(command, ";", "")
 
 	// User can run any command (including DML queries) on other lines.
