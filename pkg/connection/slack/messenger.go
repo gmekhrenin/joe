@@ -100,7 +100,6 @@ func (m *Messenger) Publish(message *structs.Message) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to post a message")
 		}
-		//message.ChannelID = channelID // Shouldn't change, but update just in case.
 		message.MessageID = timestamp
 
 	case messageTypeThread:
