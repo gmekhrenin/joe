@@ -1,12 +1,14 @@
 connections:
   slack:
     - name: WORKSPACE
+      credentials:
+        accessToken: access_token
+        signingSecret: secret_signing
       channels:
         - channelID: channelID1
           dblab: prod1
         - channelID: channelID2
           dblab: dev02
-    - name: NAME
   webui:
 
 dblabs:

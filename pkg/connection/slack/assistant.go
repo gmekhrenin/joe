@@ -2,34 +2,34 @@
 2019 © Postgres.ai
 */
 
-// package slack provides the Slack implementation of the communication interface.
+// Package slack provides the Slack implementation of the communication interface.
 package slack
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"html"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
-
-	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
-	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
-	slackConfig  *SlackConfig
-	msgProcessor *msgproc.ProcessingService
+	credentialsCfg *config.Credentials
+	msgProcessor   *msgproc.ProcessingService
+	prefix         string
 }
 
 // SlackConfig defines a slack configuration parameters.
@@ -39,23 +39,29 @@ type SlackConfig struct {
 }
 
 // NewAssistant returns a new assistant service.
-func NewAssistant(cfg *SlackConfig, botCfg config.Bot, slackMsg *Messenger, userInformer *UserInformer, dblab *dblabapi.Client) *Assistant {
-	userManager := usermanager.NewUserManager(userInformer, botCfg.Quota)
+func NewAssistant(cfg *config.Credentials, msgProcessor *msgproc.ProcessingService) *Assistant {
 	assistant := &Assistant{
-		slackConfig:  cfg,
-		msgProcessor: msgproc.NewProcessingService(slackMsg, MessageValidator{}, dblab, userManager, botCfg),
+		credentialsCfg: cfg,
+		msgProcessor:   msgProcessor,
 	}
 
 	return assistant
 }
 
-// Init registers assistant handlers.
-func (a *Assistant) Init() error {
+// Register registers assistant handlers.
+func (a *Assistant) Register() error {
+	log.Dbg("URL-path prefix: ", a.prefix)
+
 	for path, handleFunc := range a.handlers() {
-		http.Handle(path, handleFunc)
+		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
 	}
 
 	return nil
+}
+
+// SetHandlerPrefix prepares and sets a handler URL-path prefix.
+func (a *Assistant) SetHandlerPrefix(prefix string) {
+	a.prefix = fmt.Sprintf("/%s", strings.Trim(prefix, "/"))
 }
 
 // CheckIdleSessions check the running user sessions for idleness.
@@ -197,7 +203,7 @@ func (a *Assistant) parseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, err
 
 // verifyRequest verifies a request coming from Slack
 func (a *Assistant) verifyRequest(r *http.Request) error {
-	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.slackConfig.SigningSecret)
+	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.credentialsCfg.SigningSecret)
 	if err != nil {
 		return errors.Wrap(err, "failed to init the secrets verifier")
 	}

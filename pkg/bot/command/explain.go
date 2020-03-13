@@ -14,10 +14,9 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
-	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
 
@@ -30,9 +29,7 @@ const (
 	queryExplainAnalyze = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 )
 
-func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Message, botCfg config.Bot, db *sql.DB) error {
-	explainConfig := botCfg.Explain
-
+func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Message, explainCfg pgexplain.ExplainConfig, db *sql.DB) error {
 	if apiCmd.Query == "" {
 		return errors.New(MsgExplainOptionReq)
 	}
@@ -52,7 +49,7 @@ func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Me
 	apiCmd.PlanExecJson = explainAnalyze
 
 	// Visualization.
-	explain, err := pgexplain.NewExplain(explainAnalyze, explainConfig)
+	explain, err := pgexplain.NewExplain(explainAnalyze, explainCfg)
 	if err != nil {
 		log.Err("Explain parsing: ", err)
 

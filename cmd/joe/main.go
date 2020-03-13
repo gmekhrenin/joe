@@ -17,16 +17,12 @@ import (
 	"path/filepath"
 
 	"github.com/jessevdk/go-flags"
-	"github.com/nlopes/slack"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 
-	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 )
 
@@ -95,27 +91,28 @@ func main() {
 		return
 	}
 
-	version := formatBotVersion(opts.DevGitCommitHash, opts.DevGitBranch,
-		opts.DevGitModified)
+	version := formatBotVersion(opts.DevGitCommitHash, opts.DevGitBranch, opts.DevGitModified)
 
 	log.Dbg("git: ", version)
 
-	botCfg := config.Bot{
-		Port:    opts.ServerPort,
+	spaceCfg, err := config.Load("config/config.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	botCfg := config.Config{
+		App: config.App{
+			Version:                  version,
+			Port:                     opts.ServerPort,
+			AuditEnabled:             opts.AuditEnabled,
+			MinNotifyDurationMinutes: opts.MinNotifyDuration,
+		},
 		Explain: explainConfig,
 		Quota: config.Quota{
 			Limit:    opts.QuotaLimit,
 			Interval: opts.QuotaInterval,
 		},
-		AuditEnabled:             opts.AuditEnabled,
-		MinNotifyDurationMinutes: opts.MinNotifyDuration,
 
-		DBLab: config.DBLabInstance{
-			URL:     opts.DBLabURL,
-			Token:   opts.DBLabToken,
-			DBName:  opts.DBName,
-			SSLMode: opts.SSLMode,
-		},
 
 		Platform: config.Platform{
 			URL:            opts.PlatformURL,
@@ -123,32 +120,12 @@ func main() {
 			Project:        opts.PlatformProject,
 			HistoryEnabled: opts.HistoryEnabled,
 		},
-
-		Version: version,
 	}
 
-	chatAPI := slack.New(opts.AccessToken)
-
-	dbLabClient, err := dblabapi.NewClient(dblabapi.Options{
-		Host:              botCfg.DBLab.URL,
-		VerificationToken: botCfg.DBLab.Token,
-	}, logrus.New())
-
-	if err != nil {
-		log.Fatal("Failed to create a Database Lab client", err)
+	joeBot := bot.NewApp(botCfg, spaceCfg)
+	if err := joeBot.RunServer(context.Background()); err != nil {
+		log.Err("HTTP server error:", err)
 	}
-
-	slackCfg := &slackConnection.SlackConfig{
-		AccessToken:   opts.AccessToken,
-		SigningSecret: opts.SigningSecret,
-	}
-
-	messenger := slackConnection.NewMessenger(chatAPI, slackCfg)
-	userInformer := slackConnection.NewUserInformer(chatAPI)
-	assistant := slackConnection.NewAssistant(slackCfg, botCfg, messenger, userInformer, dbLabClient)
-
-	joeBot := bot.NewApp(botCfg)
-	joeBot.RunServer(context.Background(), assistant)
 }
 
 func parseArgs() ([]string, error) {

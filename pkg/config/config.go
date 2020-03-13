@@ -12,32 +12,30 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 )
 
-// Bot defines an App configuration.
-type Bot struct {
+// Config defines an App configuration.
+type Config struct {
+	App                      App
 	Version                  string
 	Port                     uint
 	Explain                  pgexplain.ExplainConfig
 	Quota                    Quota
 	AuditEnabled             bool
 	MinNotifyDurationMinutes uint
-	DBLab                    DBLabInstance
 	Platform                 Platform
-	Connections              MessengerConfig          `yaml:"connections"`
-	DBLabInstances           map[string]DBLabInstance `yaml:"dblabs"`
+}
+
+// App defines a general application configuration.
+type App struct {
+	Version                  string
+	Port                     uint
+	AuditEnabled             bool
+	MinNotifyDurationMinutes uint
 }
 
 // Quota contains quota configuration parameters.
 type Quota struct {
 	Limit    uint
 	Interval uint // Seconds.
-}
-
-// DBLabInstance contains Database Lab config.
-type DBLabInstance struct {
-	URL     string `yaml:"url"`
-	Token   string `yaml:"token"`
-	DBName  string `yaml:"dbname"`
-	SSLMode string `yaml:"sslmode"`
 }
 
 // Platform describes configuration parameters of a Postgres.ai platform.
@@ -48,32 +46,47 @@ type Platform struct {
 	HistoryEnabled bool
 }
 
-// MessengerConfig defines available connections.
-type MessengerConfig struct {
-	Slack []Workspace `yaml:"slack,flow"`
+type Space struct {
+	Connections    map[string][]Workspace   `yaml:"connections,flow"`
+	DBLabInstances map[string]DBLabInstance `yaml:"dblabs"`
 }
 
-// Workspace defines a Slack workspaces.
+// DBLabInstance contains Database Lab config.
+type DBLabInstance struct {
+	URL     string `yaml:"url"`
+	Token   string `yaml:"token"`
+	DBName  string `yaml:"dbname"`
+	SSLMode string `yaml:"sslmode"`
+}
+
+// Workspace defines a connection space.
 type Workspace struct {
-	Name     string         `yaml:"name"`
-	Channels []SlackChannel `yaml:"channels"`
+	Name        string      `yaml:"name"`
+	Credentials Credentials `yaml:"credentials"`
+	Channels    []Channel   `yaml:"channels"`
 }
 
-// SlackChannel defines a Slack channel configuration.
-type SlackChannel struct {
+// Credentials defines connection space credentials.
+type Credentials struct {
+	AccessToken   string `yaml:"accessToken"`
+	SigningSecret string `yaml:"signingSecret"`
+}
+
+// Channel defines a connection channel configuration.
+type Channel struct {
 	ChannelID string `yaml:"channelID"`
 	DBLabID   string `yaml:"dblab"`
 }
 
 // Load loads configuration from file.
-func Load(filename string) (*Bot, error) {
+func Load(filename string) (*Space, error) {
 	//nolint:gosec
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config Bot
+	var config Space
 	if err = yaml.Unmarshal(bytes, &config); err != nil {
 		return nil, err
 	}
