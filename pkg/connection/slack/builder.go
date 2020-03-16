@@ -9,7 +9,6 @@ import (
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
@@ -31,7 +30,29 @@ func NewBuilder(credentials *config.Credentials, cfg *config.Config, chatApi *sl
 	return &Builder{credentialsCfg: credentials, chatApi: chatApi, appCfg: cfg}, nil
 }
 
-func (b *Builder) Build(dbLabInstance *dblab.DBLabInstance) connection.Assistant {
+//func (b *Builder) Build(dbLabInstance *dblab.DBLabInstance) connection.Assistant {
+//	slackCfg := &SlackConfig{
+//		AccessToken:   b.credentialsCfg.AccessToken,
+//		SigningSecret: b.credentialsCfg.SigningSecret,
+//	}
+//
+//	messenger := NewMessenger(b.chatApi, slackCfg)
+//	userInformer := NewUserInformer(b.chatApi)
+//	userManager := usermanager.NewUserManager(userInformer, b.appCfg.Quota)
+//
+//	processingCfg := msgproc.ProcessingConfig{
+//		App:      b.appCfg.App,
+//		Platform: b.appCfg.Platform,
+//		Explain:  b.appCfg.Explain,
+//		DBLab:    dbLabInstance.Config(),
+//	}
+//
+//	processingService := msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, processingCfg)
+//
+//	return NewAssistant(b.credentialsCfg, processingService)
+//}
+
+func (b *Builder) Build(dbLabInstance *dblab.DBLabInstance) *msgproc.ProcessingService {
 	slackCfg := &SlackConfig{
 		AccessToken:   b.credentialsCfg.AccessToken,
 		SigningSecret: b.credentialsCfg.SigningSecret,
@@ -50,7 +71,7 @@ func (b *Builder) Build(dbLabInstance *dblab.DBLabInstance) connection.Assistant
 
 	processingService := msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, processingCfg)
 
-	return NewAssistant(b.credentialsCfg, processingService)
+	return processingService
 }
 
 func validateCredentials(credentials *config.Credentials) error {

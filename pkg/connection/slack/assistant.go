@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/nlopes/slack"
 	"github.com/nlopes/slack/slackevents"
@@ -21,14 +22,15 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
-	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
 )
 
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
 	credentialsCfg *config.Credentials
-	msgProcessor   *msgproc.ProcessingService
+	procMu         sync.RWMutex
+	msgProcessor   map[string]connection.MessageProcessor
 	prefix         string
 }
 
@@ -39,10 +41,11 @@ type SlackConfig struct {
 }
 
 // NewAssistant returns a new assistant service.
-func NewAssistant(cfg *config.Credentials, msgProcessor *msgproc.ProcessingService) *Assistant {
+//func NewAssistant(cfg *config.Credentials msgProcessor *msgproc.ProcessingService) *Assistant {
+func NewAssistant(cfg *config.Credentials) *Assistant {
 	assistant := &Assistant{
 		credentialsCfg: cfg,
-		msgProcessor:   msgProcessor,
+		//msgProcessor:   msgProcessor,
 	}
 
 	return assistant
@@ -64,9 +67,32 @@ func (a *Assistant) SetHandlerPrefix(prefix string) {
 	a.prefix = fmt.Sprintf("/%s", strings.Trim(prefix, "/"))
 }
 
+func (a *Assistant) AddProcessingService(channelID string, service connection.MessageProcessor) {
+	//a.prefix = fmt.Sprintf("/%s", strings.Trim(prefix, "/"))
+	a.procMu.Lock()
+	a.msgProcessor[channelID] = service
+	a.procMu.Unlock()
+}
+
+func (a *Assistant) GetProcessingService(channelID string) (connection.MessageProcessor, error) {
+	a.procMu.RLock()
+	defer a.procMu.RUnlock()
+
+	svc, ok := a.msgProcessor[channelID]
+	if !ok {
+		return nil, errors.New("service not found")
+	}
+
+	return svc, nil
+}
+
 // CheckIdleSessions check the running user sessions for idleness.
 func (a *Assistant) CheckIdleSessions(ctx context.Context) {
-	a.msgProcessor.CheckIdleSessions(ctx)
+	a.procMu.RLock()
+	for _, proc := range a.msgProcessor {
+		proc.CheckIdleSessions(ctx)
+	}
+	a.procMu.RUnlock()
 }
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
@@ -135,19 +161,34 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 		case *slackevents.AppMentionEvent:
 			log.Dbg("Event type: AppMention")
 
+			msgProcessor, err := a.GetProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				return
+			}
+
 			msg := a.appMentionEventToIncomingMessage(ev)
-			a.msgProcessor.ProcessAppMentionEvent(msg)
+			msgProcessor.ProcessAppMentionEvent(msg)
 
 		case *slackevents.MessageEvent:
-			log.Dbg("Event type: Message")
+			//log.Dbg("Event type: Message")
+
+			log.Dbg(fmt.Sprintf("Message: %#v", ev))
 
 			if ev.BotID != "" {
 				// Skip messages sent by bots.
 				return
 			}
 
+			msgProcessor, err := a.GetProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				return
+			}
+
+			//msg := a.appMentionEventToIncomingMessage(ev)
 			msg := a.messageEventToIncomingMessage(ev)
-			a.msgProcessor.ProcessMessageEvent(msg)
+			msgProcessor.ProcessMessageEvent(msg)
 
 		default:
 			log.Dbg("Event filtered: Inner event type not supported")

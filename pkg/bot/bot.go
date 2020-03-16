@@ -123,25 +123,34 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 
 	for workspaceType, workspaceList := range a.spaceCfg.Connections {
 		for _, workspace := range workspaceList {
-			workspaceAssistants, err := a.getWorkspaceAssistants(workspaceType, workspace)
+			assist, err := a.getAssistant(workspaceType, workspace)
 			if err != nil {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
 
-			assistants = append(assistants, workspaceAssistants...)
+			assist.SetHandlerPrefix(fmt.Sprintf("/%s", workspaceType))
+
+			if err := a.getWorkspaceAssistants(assist, workspaceType, workspace); err != nil {
+				return nil, errors.Wrap(err, "failed to register workspace assistants")
+			}
+
+			assistants = append(assistants, assist)
 		}
 	}
 
 	return assistants, nil
 }
 
-func (a *App) getWorkspaceAssistants(workspaceType string, workspace config.Workspace) ([]connection.Assistant, error) {
+func (a *App) getWorkspaceAssistants(assistant connection.Assistant, workspaceType string, workspace config.Workspace) error {
 	builder, err := a.getAssistantBuilder(workspaceType, workspace)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to get an assistant builder")
+		return errors.Wrap(err, "failed to get an assistant builder")
 	}
 
-	assistants := make([]connection.Assistant, 0, len(workspace.Channels))
+	//assistants := make([]connection.Assistant, 0, len(workspace.Channels))
+
+	//assistant := slackConnection.NewAssistant(&workspace.Credentials)
+	//assistant.SetHandlerPrefix(fmt.Sprintf("/%s", workspaceType))
 
 	for _, channel := range workspace.Channels {
 		a.dblabMu.RLock()
@@ -149,25 +158,38 @@ func (a *App) getWorkspaceAssistants(workspaceType string, workspace config.Work
 		dbLabInstance, ok := a.dblabInstances[channel.DBLabID]
 		if !ok {
 			a.dblabMu.RUnlock()
-			return nil, errors.Errorf("Failed to find a configuration of the Database Lab client: %q", channel.DBLabID)
+			return errors.Errorf("Failed to find a configuration of the Database Lab client: %q", channel.DBLabID)
 		}
 
 		a.dblabMu.RUnlock()
 
-		assistant := builder.Build(dbLabInstance)
-		assistant.SetHandlerPrefix(fmt.Sprintf("/%s/%s", workspaceType, channel.ChannelID))
+		//assistant := builder.Build(dbLabInstance)
 
-		assistants = append(assistants, assistant)
+		proc := builder.Build(dbLabInstance)
+		assistant.AddProcessingService(channel.ChannelID, proc)
 	}
 
-	return assistants, nil
+	//assistants = append(assistants, assistant)
+
+	return nil
 }
 
-func (a *App) getAssistantBuilder(workspaceType string, workspaceCfg config.Workspace) (connection.AssistantBuiilder, error) {
+func (a *App) getAssistantBuilder(workspaceType string, workspaceCfg config.Workspace) (*slackConnection.Builder, error) {
 	switch workspaceType {
 	case slackWorkspace:
 		chatAPI := slack.New(workspaceCfg.Credentials.AccessToken)
 		return slackConnection.NewBuilder(&workspaceCfg.Credentials, &a.Config, chatAPI)
+
+	default:
+		return nil, errors.New("unknown workspace type given")
+	}
+}
+
+func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
+	switch workspaceType {
+	case slackWorkspace:
+		//chatAPI := slack.New(workspaceCfg.Credentials.AccessToken)
+		return slackConnection.NewAssistant(&workspaceCfg.Credentials), nil
 
 	default:
 		return nil, errors.New("unknown workspace type given")

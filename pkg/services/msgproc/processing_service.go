@@ -148,6 +148,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 
 	user.Session.LastActionTs = time.Now()
 	if !util.Contains(user.Session.ChannelIDs, incomingMessage.ChannelID) {
+		//user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
 		user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
 	}
 
