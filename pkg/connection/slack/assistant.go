@@ -24,14 +24,18 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
+	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
+	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
 	credentialsCfg *config.Credentials
 	procMu         sync.RWMutex
-	msgProcessor   map[string]connection.MessageProcessor
+	msgProcessors  map[string]connection.MessageProcessor
 	prefix         string
+	appCfg         *config.Config
 }
 
 // SlackConfig defines a slack configuration parameters.
@@ -41,18 +45,30 @@ type SlackConfig struct {
 }
 
 // NewAssistant returns a new assistant service.
-//func NewAssistant(cfg *config.Credentials msgProcessor *msgproc.ProcessingService) *Assistant {
-func NewAssistant(cfg *config.Credentials) *Assistant {
-	assistant := &Assistant{
-		credentialsCfg: cfg,
-		msgProcessor:   make(map[string]connection.MessageProcessor),
+func NewAssistant(cfg *config.Credentials, appCfg *config.Config) (*Assistant, error) {
+	if err := validateCredentials(cfg); err != nil {
+		return nil, errors.Wrap(err, "invalid credentials given")
 	}
 
-	return assistant
+	assistant := &Assistant{
+		credentialsCfg: cfg,
+		appCfg:         appCfg,
+		msgProcessors:  make(map[string]connection.MessageProcessor),
+	}
+
+	return assistant, nil
 }
 
-// Register registers assistant handlers.
-func (a *Assistant) Register() error {
+func validateCredentials(credentials *config.Credentials) error {
+	if credentials == nil || credentials.AccessToken == "" || credentials.SigningSecret == "" {
+		return errors.New("access_token and signing_secret must not be empty")
+	}
+
+	return nil
+}
+
+// Init registers assistant handlers.
+func (a *Assistant) Init() error {
 	log.Dbg("URL-path prefix: ", a.prefix)
 
 	if a.lenMessageProcessor() == 0 {
@@ -70,7 +86,7 @@ func (a *Assistant) lenMessageProcessor() int {
 	a.procMu.RLock()
 	defer a.procMu.RUnlock()
 
-	return len(a.msgProcessor)
+	return len(a.msgProcessors)
 }
 
 // SetHandlerPrefix prepares and sets a handler URL-path prefix.
@@ -78,29 +94,54 @@ func (a *Assistant) SetHandlerPrefix(prefix string) {
 	a.prefix = fmt.Sprintf("/%s", strings.Trim(prefix, "/"))
 }
 
-func (a *Assistant) AddProcessingService(channelID string, service connection.MessageProcessor) {
-	//a.prefix = fmt.Sprintf("/%s", strings.Trim(prefix, "/"))
+// AddDBLabInstanceForChannel sets a message processor for a specific channel.
+func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.DBLabInstance) {
+	messageProcessor := a.buildMessageProcessor(a.appCfg, dbLabInstance)
+
 	a.procMu.Lock()
-	a.msgProcessor[channelID] = service
+	a.msgProcessors[channelID] = messageProcessor
 	a.procMu.Unlock()
 }
 
-func (a *Assistant) GetProcessingService(channelID string) (connection.MessageProcessor, error) {
+func (b *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *dblab.DBLabInstance) *msgproc.ProcessingService {
+	slackCfg := &SlackConfig{
+		AccessToken:   b.credentialsCfg.AccessToken,
+		SigningSecret: b.credentialsCfg.SigningSecret,
+	}
+
+	chatAPI := slack.New(slackCfg.AccessToken)
+
+	messenger := NewMessenger(chatAPI, slackCfg)
+	userInformer := NewUserInformer(chatAPI)
+	userManager := usermanager.NewUserManager(userInformer, appCfg.Quota)
+
+	processingCfg := msgproc.ProcessingConfig{
+		App:      appCfg.App,
+		Platform: appCfg.Platform,
+		Explain:  appCfg.Explain,
+		DBLab:    dbLabInstance.Config(),
+	}
+
+	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, processingCfg)
+}
+
+// getProcessingService returns processing service by channelID.
+func (a *Assistant) getProcessingService(channelID string) (connection.MessageProcessor, error) {
 	a.procMu.RLock()
 	defer a.procMu.RUnlock()
 
-	svc, ok := a.msgProcessor[channelID]
+	messageProcessor, ok := a.msgProcessors[channelID]
 	if !ok {
-		return nil, errors.New("service not found")
+		return nil, errors.Errorf("message processor for %q channel not found", channelID)
 	}
 
-	return svc, nil
+	return messageProcessor, nil
 }
 
 // CheckIdleSessions check the running user sessions for idleness.
 func (a *Assistant) CheckIdleSessions(ctx context.Context) {
 	a.procMu.RLock()
-	for _, proc := range a.msgProcessor {
+	for _, proc := range a.msgProcessors {
 		proc.CheckIdleSessions(ctx)
 	}
 	a.procMu.RUnlock()
@@ -172,7 +213,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 		case *slackevents.AppMentionEvent:
 			log.Dbg("Event type: AppMention")
 
-			msgProcessor, err := a.GetProcessingService(ev.Channel)
+			msgProcessor, err := a.getProcessingService(ev.Channel)
 			if err != nil {
 				log.Err("failed to get processing service", err)
 				return
@@ -182,22 +223,19 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 			msgProcessor.ProcessAppMentionEvent(msg)
 
 		case *slackevents.MessageEvent:
-			//log.Dbg("Event type: Message")
-
-			log.Dbg(fmt.Sprintf("Message: %#v", ev))
+			log.Dbg("Event type: Message")
 
 			if ev.BotID != "" {
 				// Skip messages sent by bots.
 				return
 			}
 
-			msgProcessor, err := a.GetProcessingService(ev.Channel)
+			msgProcessor, err := a.getProcessingService(ev.Channel)
 			if err != nil {
 				log.Err("failed to get processing service", err)
 				return
 			}
 
-			//msg := a.appMentionEventToIncomingMessage(ev)
 			msg := a.messageEventToIncomingMessage(ev)
 			msgProcessor.ProcessMessageEvent(msg)
 

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
@@ -66,7 +65,7 @@ func (a *App) RunServer(ctx context.Context) error {
 	}
 
 	for _, assistantSvc := range assistants {
-		if err := assistantSvc.Register(); err != nil {
+		if err := assistantSvc.Init(); err != nil {
 			return errors.Wrap(err, "failed to init an assistant")
 		}
 
@@ -130,7 +129,7 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 
 			assist.SetHandlerPrefix(fmt.Sprintf("/%s", workspaceType))
 
-			if err := a.getWorkspaceAssistants(assist, workspaceType, workspace); err != nil {
+			if err := a.setupDBLabInstances(assist, workspace); err != nil {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
 
@@ -141,57 +140,30 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 	return assistants, nil
 }
 
-func (a *App) getWorkspaceAssistants(assistant connection.Assistant, workspaceType string, workspace config.Workspace) error {
-	builder, err := a.getAssistantBuilder(workspaceType, workspace)
-	if err != nil {
-		return errors.Wrap(err, "failed to get an assistant builder")
+func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
+	switch workspaceType {
+	case slackWorkspace:
+		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config)
+
+	default:
+		return nil, errors.New("unknown workspace type given")
 	}
+}
 
-	//assistants := make([]connection.Assistant, 0, len(workspace.Channels))
-
-	//assistant := slackConnection.NewAssistant(&workspace.Credentials)
-	//assistant.SetHandlerPrefix(fmt.Sprintf("/%s", workspaceType))
-
+func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace config.Workspace) error {
 	for _, channel := range workspace.Channels {
 		a.dblabMu.RLock()
 
 		dbLabInstance, ok := a.dblabInstances[channel.DBLabID]
 		if !ok {
 			a.dblabMu.RUnlock()
-			return errors.Errorf("Failed to find a configuration of the Database Lab client: %q", channel.DBLabID)
+			return errors.Errorf("failed to find a configuration of the Database Lab client: %q", channel.DBLabID)
 		}
 
 		a.dblabMu.RUnlock()
 
-		//assistant := builder.Build(dbLabInstance)
-
-		proc := builder.Build(dbLabInstance)
-		assistant.AddProcessingService(channel.ChannelID, proc)
+		assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance)
 	}
-
-	//assistants = append(assistants, assistant)
 
 	return nil
-}
-
-func (a *App) getAssistantBuilder(workspaceType string, workspaceCfg config.Workspace) (*slackConnection.Builder, error) {
-	switch workspaceType {
-	case slackWorkspace:
-		chatAPI := slack.New(workspaceCfg.Credentials.AccessToken)
-		return slackConnection.NewBuilder(&workspaceCfg.Credentials, &a.Config, chatAPI)
-
-	default:
-		return nil, errors.New("unknown workspace type given")
-	}
-}
-
-func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
-	switch workspaceType {
-	case slackWorkspace:
-		//chatAPI := slack.New(workspaceCfg.Credentials.AccessToken)
-		return slackConnection.NewAssistant(&workspaceCfg.Credentials), nil
-
-	default:
-		return nil, errors.New("unknown workspace type given")
-	}
 }
