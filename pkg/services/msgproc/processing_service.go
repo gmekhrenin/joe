@@ -104,6 +104,7 @@ type ProcessingService struct {
 	//Limiter
 }
 
+// ProcessingConfig declares a configuration of Processing Service.
 type ProcessingConfig struct {
 	App      config.App
 	Platform config.Platform
@@ -147,10 +148,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 
 	user.Session.LastActionTs = time.Now()
-	if !util.Contains(user.Session.ChannelIDs, incomingMessage.ChannelID) {
-		//user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
-		user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
-	}
+	user.Session.ChannelID = incomingMessage.ChannelID
 
 	// Filter and prepare message.
 	message := strings.TrimSpace(incomingMessage.Text)

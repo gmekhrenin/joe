@@ -46,6 +46,7 @@ type Platform struct {
 	HistoryEnabled bool
 }
 
+// Space contains configuration parameters of connections and Database Labs.
 type Space struct {
 	Connections    map[string][]Workspace   `yaml:"connections,flow"`
 	DBLabInstances map[string]DBLabInstance `yaml:"dblabs"`

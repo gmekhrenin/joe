@@ -1,3 +1,8 @@
+/*
+2019 © Postgres.ai
+*/
+
+// Package dblab provides Database Lab instances.
 package dblab
 
 import (
@@ -6,21 +11,23 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 )
 
-// DBLabInstance contains a Database Lab client and its configuration.
-type DBLabInstance struct {
+// Instance contains a Database Lab client and its configuration.
+type Instance struct {
 	client *dblabapi.Client
 	cfg    config.DBLabInstance
 }
 
-// NewDBLabInstance creates a new DBLabInstance.
-func NewDBLabInstance(client *dblabapi.Client, cfg config.DBLabInstance) *DBLabInstance {
-	return &DBLabInstance{client: client, cfg: cfg}
+// NewDBLabInstance creates a new Database Lab Instance.
+func NewDBLabInstance(client *dblabapi.Client, cfg config.DBLabInstance) *Instance {
+	return &Instance{client: client, cfg: cfg}
 }
 
-func (d DBLabInstance) Client() *dblabapi.Client {
+// Client returns a Database Lab client of the instance.
+func (d Instance) Client() *dblabapi.Client {
 	return d.client
 }
 
-func (d DBLabInstance) Config() config.DBLabInstance {
+// Config returns a Database Lab config of the instance.
+func (d Instance) Config() config.DBLabInstance {
 	return d.cfg
 }

@@ -95,7 +95,7 @@ func (a *Assistant) SetHandlerPrefix(prefix string) {
 }
 
 // AddDBLabInstanceForChannel sets a message processor for a specific channel.
-func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.DBLabInstance) {
+func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) {
 	messageProcessor := a.buildMessageProcessor(a.appCfg, dbLabInstance)
 
 	a.procMu.Lock()
@@ -103,10 +103,10 @@ func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *
 	a.procMu.Unlock()
 }
 
-func (b *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *dblab.DBLabInstance) *msgproc.ProcessingService {
+func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
 	slackCfg := &SlackConfig{
-		AccessToken:   b.credentialsCfg.AccessToken,
-		SigningSecret: b.credentialsCfg.SigningSecret,
+		AccessToken:   a.credentialsCfg.AccessToken,
+		SigningSecret: a.credentialsCfg.SigningSecret,
 	}
 
 	chatAPI := slack.New(slackCfg.AccessToken)

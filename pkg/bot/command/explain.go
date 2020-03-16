@@ -29,7 +29,9 @@ const (
 	queryExplainAnalyze = "EXPLAIN (ANALYZE, COSTS, VERBOSE, BUFFERS, FORMAT JSON) "
 )
 
-func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Message, explainCfg pgexplain.ExplainConfig, db *sql.DB) error {
+// Explain runs an explain query.
+func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Message,
+	explainConfig pgexplain.ExplainConfig, db *sql.DB) error {
 	if apiCmd.Query == "" {
 		return errors.New(MsgExplainOptionReq)
 	}
@@ -49,7 +51,7 @@ func Explain(msgSvc connection.Messenger, apiCmd *api.ApiCommand, msg *models.Me
 	apiCmd.PlanExecJson = explainAnalyze
 
 	// Visualization.
-	explain, err := pgexplain.NewExplain(explainAnalyze, explainCfg)
+	explain, err := pgexplain.NewExplain(explainAnalyze, explainConfig)
 	if err != nil {
 		log.Err("Explain parsing: ", err)
 

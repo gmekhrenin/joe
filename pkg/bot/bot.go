@@ -14,6 +14,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
@@ -38,7 +39,7 @@ type App struct {
 	spaceCfg *config.Space
 
 	dblabMu        *sync.RWMutex
-	dblabInstances map[string]*dblab.DBLabInstance
+	dblabInstances map[string]*dblab.Instance
 }
 
 // Creates a new application.
@@ -47,7 +48,7 @@ func NewApp(cfg config.Config, spaceCfg *config.Space) *App {
 		Config:         cfg,
 		spaceCfg:       spaceCfg,
 		dblabMu:        &sync.RWMutex{},
-		dblabInstances: make(map[string]*dblab.DBLabInstance, len(spaceCfg.DBLabInstances)),
+		dblabInstances: make(map[string]*dblab.Instance, len(spaceCfg.DBLabInstances)),
 	}
 
 	return &bot
