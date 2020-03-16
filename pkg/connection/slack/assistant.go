@@ -45,7 +45,7 @@ type SlackConfig struct {
 func NewAssistant(cfg *config.Credentials) *Assistant {
 	assistant := &Assistant{
 		credentialsCfg: cfg,
-		//msgProcessor:   msgProcessor,
+		msgProcessor:   make(map[string]connection.MessageProcessor),
 	}
 
 	return assistant
@@ -55,11 +55,22 @@ func NewAssistant(cfg *config.Credentials) *Assistant {
 func (a *Assistant) Register() error {
 	log.Dbg("URL-path prefix: ", a.prefix)
 
+	if a.lenMessageProcessor() == 0 {
+		return errors.New("no message processor set")
+	}
+
 	for path, handleFunc := range a.handlers() {
 		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
 	}
 
 	return nil
+}
+
+func (a *Assistant) lenMessageProcessor() int {
+	a.procMu.RLock()
+	defer a.procMu.RUnlock()
+
+	return len(a.msgProcessor)
 }
 
 // SetHandlerPrefix prepares and sets a handler URL-path prefix.
