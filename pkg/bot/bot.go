@@ -89,6 +89,10 @@ func (a *App) RunServer(ctx context.Context) error {
 
 func (a *App) initDBLabInstances() error {
 	for name, dbLab := range a.spaceCfg.DBLabInstances {
+		if err := a.validateDBLabInstance(dbLab); err != nil {
+			return errors.Wrapf(err, "failed to init %q", name)
+		}
+
 		dbLabClient, err := dblabapi.NewClient(dblabapi.Options{
 			Host:              dbLab.URL,
 			VerificationToken: dbLab.Token,
@@ -101,6 +105,14 @@ func (a *App) initDBLabInstances() error {
 		a.dblabMu.Lock()
 		a.dblabInstances[name] = dblab.NewDBLabInstance(dbLabClient, dbLab)
 		a.dblabMu.Unlock()
+	}
+
+	return nil
+}
+
+func (a *App) validateDBLabInstance(instance config.DBLabInstance) error {
+	if instance.URL == "" || instance.Token == "" || instance.DBName == "" {
+		return errors.New("invalid DBLab Instance config given")
 	}
 
 	return nil
@@ -155,7 +167,7 @@ func (a *App) getAssistantBuilder(workspaceType string, workspaceCfg config.Work
 	switch workspaceType {
 	case slackWorkspace:
 		chatAPI := slack.New(workspaceCfg.Credentials.AccessToken)
-		return slackConnection.NewBuilder(&workspaceCfg.Credentials, &a.Config, chatAPI), nil
+		return slackConnection.NewBuilder(&workspaceCfg.Credentials, &a.Config, chatAPI)
 
 	default:
 		return nil, errors.New("unknown workspace type given")

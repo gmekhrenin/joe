@@ -71,7 +71,7 @@ func (a *Assistant) CheckIdleSessions(ctx context.Context) {
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"/": a.handleEvent,
+		"": a.handleEvent,
 	}
 }
 

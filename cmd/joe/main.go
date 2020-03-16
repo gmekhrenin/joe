@@ -27,17 +27,6 @@ import (
 )
 
 var opts struct {
-	// Chat API.
-	AccessToken   string `short:"t" long:"token" description:"\"Bot User OAuth Access Token\" which starts with \"xoxb-\"" env:"CHAT_TOKEN" required:"true"`
-	SigningSecret string `long:"signing-secret" description:"The secret confirms that each request comes from Slack by verifying its unique signature." env:"CHAT_SIGNING_SECRET" required:"true"`
-
-	// Database Lab.
-	DBLabURL   string `long:"dblab-url" description:"Database Lab URL" env:"DBLAB_URL" default:"localhost"`
-	DBLabToken string `long:"dblab-token" description:"Database Lab token" env:"DBLAB_TOKEN" default:"xxx"`
-
-	DBName  string `short:"d" long:"dbname" description:"database name to connect to" env:"DBLAB_DBNAME" default:"db"`
-	SSLMode string `long:"ssl-mode" description:"ssl mode provides different protection levels of a Database Lab connection." env:"DBLAB_SSL_MODE" default:"require"`
-
 	// HTTP Server.
 	ServerPort uint `short:"s" long:"http-port" description:"HTTP server port" env:"SERVER_PORT" default:"3001"`
 
