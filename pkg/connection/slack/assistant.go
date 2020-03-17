@@ -26,6 +26,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/services/msgproc"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
@@ -95,15 +96,20 @@ func (a *Assistant) SetHandlerPrefix(prefix string) {
 }
 
 // AddDBLabInstanceForChannel sets a message processor for a specific channel.
-func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) {
-	messageProcessor := a.buildMessageProcessor(a.appCfg, dbLabInstance)
+func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) error {
+	messageProcessor, err := a.buildMessageProcessor(a.appCfg, dbLabInstance)
+	if err != nil {
+		return errors.Wrap(err, "failed to build a message processor")
+	}
 
 	a.procMu.Lock()
 	a.msgProcessors[channelID] = messageProcessor
 	a.procMu.Unlock()
+
+	return nil
 }
 
-func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
+func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *dblab.Instance) (*msgproc.ProcessingService, error) {
 	slackCfg := &SlackConfig{
 		AccessToken:   a.credentialsCfg.AccessToken,
 		SigningSecret: a.credentialsCfg.SigningSecret,
@@ -122,7 +128,13 @@ func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *
 		DBLab:    dbLabInstance.Config(),
 	}
 
-	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, processingCfg)
+	platformManager, err := platform.NewClient(appCfg.Platform)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create a Platform client")
+	}
+
+	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, platformManager,
+		processingCfg), nil
 }
 
 // getProcessingService returns processing service by channelID.
@@ -237,7 +249,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 			}
 
 			msg := a.messageEventToIncomingMessage(ev)
-			msgProcessor.ProcessMessageEvent(msg)
+			msgProcessor.ProcessMessageEvent(context.TODO(), msg)
 
 		default:
 			log.Dbg("Event filtered: Inner event type not supported")

@@ -6,13 +6,9 @@
 package msgproc
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"time"
 
@@ -25,8 +21,8 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
-	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
@@ -127,7 +123,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	user.Session.CloneConnection = db
 
 	if s.config.Platform.HistoryEnabled {
-		if err := s.createPlatformSession(user, sMsg.ChannelID); err != nil {
+		if err := s.createPlatformSession(ctx, user, sMsg.ChannelID); err != nil {
 			s.messenger.Fail(sMsg, err.Error())
 			return err
 		}
@@ -210,8 +206,14 @@ func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermana
 }
 
 // createPlatformSession starts a new platform session.
-func (s *ProcessingService) createPlatformSession(user *usermanager.User, channelID string) error {
-	sessionID, err := s.APICreatePlatformSession(user.UserInfo.ID, user.UserInfo.Name, channelID)
+func (s *ProcessingService) createPlatformSession(ctx context.Context, user *usermanager.User, channelID string) error {
+	platformSession := platform.Session{
+		ProjectName: s.config.Platform.Project,
+		UserID:      user.UserInfo.ID,
+		Username:    user.UserInfo.Name,
+		ChannelID:   channelID,
+	}
+	sessionID, err := s.platformManager.CreatePlatformSession(ctx, platformSession)
 	if err != nil {
 		log.Err("API: Create platform session:", err)
 
@@ -225,46 +227,6 @@ func (s *ProcessingService) createPlatformSession(user *usermanager.User, channe
 	user.Session.PlatformSessionID = sessionID
 
 	return nil
-}
-
-// APICreatePlatformSession makes an HTTP request to create a new platform session.
-func (s *ProcessingService) APICreatePlatformSession(uid string, username string, channel string) (string, error) {
-	log.Dbg("API: Create session")
-
-	reqData, err := json.Marshal(&api.ApiSession{
-		ProjectName:   s.config.Platform.Project,
-		AccessToken:   s.config.Platform.Token,
-		SlackUid:      uid,
-		SlackUsername: username,
-		SlackChannel:  channel,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	resp, err := http.Post(s.config.Platform.URL+"/rpc/joe_session_create", "application/json", bytes.NewBuffer(reqData))
-	if err != nil {
-		return "", err
-	}
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	respData := api.ApiCreateSessionResp{}
-
-	if err := json.Unmarshal(bodyBytes, &respData); err != nil {
-		return "", err
-	}
-
-	if len(respData.Code) > 0 || len(respData.Message) > 0 {
-		return "", errors.Errorf("error: %v", respData)
-	}
-
-	log.Dbg("API: Create session success", respData.SessionId)
-
-	return fmt.Sprintf("%d", respData.SessionId), nil
 }
 
 func getForeword(idleDuration time.Duration, version, dataStateAt string) string {

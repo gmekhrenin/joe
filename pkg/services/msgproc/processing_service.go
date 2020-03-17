@@ -19,13 +19,13 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
 
-	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/ee"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
@@ -96,10 +96,10 @@ type ProcessingService struct {
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
 	UserManager      *usermanager.UserManager
+	platformManager  *platform.Client
 	config           ProcessingConfig
 
 	// TODO (akartasov): Add specific services.
-	//PlatformManager
 	//Auditor
 	//Limiter
 }
@@ -116,18 +116,19 @@ var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, cfg ProcessingConfig) *ProcessingService {
+	userSvc *usermanager.UserManager, platform *platform.Client, cfg ProcessingConfig) *ProcessingService {
 	return &ProcessingService{
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
 		UserManager:      userSvc,
+		platformManager:  platform,
 		config:           cfg,
 	}
 }
 
 // ProcessMessageEvent replies to a message.
-func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingMessage) {
+func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMessage models.IncomingMessage) {
 	// Filter incoming message.
 	if err := s.messageValidator.Validate(&incomingMessage); err != nil {
 		log.Err(errors.Wrap(err, "incoming message is invalid"))
@@ -256,7 +257,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		return
 	}
 
-	if err := s.runSession(context.TODO(), user, incomingMessage.ChannelID); err != nil {
+	if err := s.runSession(ctx, user, incomingMessage.ChannelID); err != nil {
 		log.Err(err)
 		return
 	}
@@ -283,13 +284,11 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		log.Err(err)
 	}
 
-	apiCmd := &api.ApiCommand{
-		AccessToken: s.config.Platform.Token,
-		ApiURL:      s.config.Platform.URL,
-		SessionId:   user.Session.PlatformSessionID,
-		Command:     receivedCommand,
-		Query:       query,
-		SlackTs:     incomingMessage.Timestamp,
+	platformCmd := &platform.Command{
+		SessionID: user.Session.PlatformSessionID,
+		Command:   receivedCommand,
+		Query:     query,
+		Timestamp: incomingMessage.Timestamp,
 	}
 
 	const maxRetryCounter = 1
@@ -298,37 +297,41 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
 		switch {
 		case receivedCommand == CommandExplain:
-			err = command.Explain(s.messenger, apiCmd, msg, s.config.Explain, user.Session.CloneConnection)
+			err = command.Explain(s.messenger, platformCmd, msg, s.config.Explain, user.Session.CloneConnection)
 
 		case receivedCommand == CommandPlan:
-			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+			planCmd := command.NewPlan(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = planCmd.Execute()
 
 		case receivedCommand == CommandExec:
-			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+			execCmd := command.NewExec(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = execCmd.Execute()
 
 		case receivedCommand == CommandReset:
-			err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
+			err = command.ResetSession(ctx, platformCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
 
 		case receivedCommand == CommandHypo:
-			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+			hypoCmd := command.NewHypo(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
-			err = command.Transmit(apiCmd, msg, s.messenger, runner)
+			err = command.Transmit(platformCmd, msg, s.messenger, runner)
 		}
 
 		if err != nil {
 			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {
 				s.messenger.Fail(msg, err.Error())
-				apiCmd.Fail(err.Error())
+
+				platformCmd.Error = err.Error()
+				if _, err := s.platformManager.PostCommand(ctx, platformCmd); err != nil {
+					log.Err(fmt.Sprintf("failed to post platform command: %+v", err))
+				}
 
 				return
 			}
 
-			if s.isActiveSession(context.TODO(), user.Session.Clone.ID) {
+			if s.isActiveSession(ctx, user.Session.Clone.ID) {
 				continue
 			}
 
@@ -338,7 +341,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 			}
 			s.stopSession(user)
 
-			if err := s.runSession(context.TODO(), user, msg.ChannelID); err != nil {
+			if err := s.runSession(ctx, user, msg.ChannelID); err != nil {
 				log.Err(err)
 				return
 			}
@@ -348,7 +351,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 
 	if s.config.Platform.HistoryEnabled {
-		if _, err := apiCmd.Post(); err != nil {
+		if _, err := s.platformManager.PostCommand(ctx, platformCmd); err != nil {
 			log.Err(err)
 			s.messenger.Fail(msg, err.Error())
 

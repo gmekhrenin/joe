@@ -163,7 +163,9 @@ func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace conf
 
 		a.dblabMu.RUnlock()
 
-		assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance)
+		if err := assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance); err != nil {
+			return errors.Wrap(err, "failed to add a DBLab instance")
+		}
 	}
 
 	return nil
