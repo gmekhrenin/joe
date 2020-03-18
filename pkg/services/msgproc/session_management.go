@@ -65,7 +65,7 @@ func (s *ProcessingService) CheckIdleSessions(ctx context.Context) {
 
 		msgText := "Stopped idle sessions for: " + strings.Join(formattedUserList, ", ")
 
-		msg := models.NewMessage(channelID)
+		msg := models.NewMessage(models.IncomingMessage{ChannelID: channelID})
 		msg.SetText(msgText)
 
 		if err := s.messenger.Publish(msg); err != nil {

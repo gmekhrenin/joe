@@ -140,7 +140,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
-		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to get user"))
 			return
 		}
@@ -150,6 +150,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 
 	user.Session.LastActionTs = time.Now()
 	user.Session.ChannelID = incomingMessage.ChannelID
+	user.Session.PlatformSessionID = incomingMessage.SessionID
 
 	// Filter and prepare message.
 	message := strings.TrimSpace(incomingMessage.Text)
@@ -165,7 +166,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		if err != nil {
 			log.Err(err)
 
-			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to download artifact"))
 				return
 			}
@@ -205,7 +206,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	if err := user.RequestQuota(); err != nil {
 		log.Err("Quota: ", err)
 
-		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to request quotas"))
 			return
 		}
@@ -228,7 +229,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		})
 
 		if err != nil {
-			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to marshal Audit struct"))
 				return
 			}
@@ -243,7 +244,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 
 	// Show `help` command without initializing of a session.
 	if receivedCommand == CommandHelp {
-		msg := models.NewMessage(incomingMessage.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 
 		msgText = appendHelp(msgText, s.config.App.Version)
 		msgText = appendSessionID(msgText, user)
@@ -257,12 +258,12 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		return
 	}
 
-	if err := s.runSession(ctx, user, incomingMessage.ChannelID); err != nil {
+	if err := s.runSession(ctx, user, incomingMessage); err != nil {
 		log.Err(err)
 		return
 	}
 
-	msg := models.NewMessage(incomingMessage.ChannelID)
+	msg := models.NewMessage(incomingMessage)
 
 	msgText = appendSessionID(msgText, user)
 	msg.SetText(msgText)
@@ -341,7 +342,12 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 			}
 			s.stopSession(user)
 
-			if err := s.runSession(ctx, user, msg.ChannelID); err != nil {
+			im := models.IncomingMessage{
+				ChannelID: msg.ChannelID,
+				CommandID: msg.CommandID,
+			}
+
+			if err := s.runSession(ctx, user, im); err != nil {
 				log.Err(err)
 				return
 			}
@@ -366,7 +372,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 
 // ProcessAppMentionEvent replies to an application mention event.
 func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage models.IncomingMessage) {
-	msg := models.NewMessage(incomingMessage.ChannelID)
+	msg := models.NewMessage(incomingMessage)
 
 	msg.SetText("What's up? Send `help` to see the list of available commands.")
 
@@ -378,7 +384,7 @@ func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage models.Incomi
 }
 
 // Show bot usage hints.
-func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command string, query string) {
+func (s *ProcessingService) showBotHints(incomingMessage models.IncomingMessage, command string, query string) {
 	parts := strings.SplitN(query, " ", 2)
 	firstQueryWord := strings.ToLower(parts[0])
 
@@ -386,9 +392,9 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 
 	if (checkQuery && util.Contains(hintExplainDmlWords, firstQueryWord)) ||
 		util.Contains(hintExplainDmlWords, command) {
-		msg := models.NewMessage(ev.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 		msg.SetMessageType(models.MessageTypeEphemeral)
-		msg.SetUserID(ev.UserID)
+		msg.SetUserID(incomingMessage.UserID)
 		msg.SetText(HintExplain)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -397,9 +403,9 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 
 	if util.Contains(hintExecDdlWords, command) {
-		msg := models.NewMessage(ev.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 		msg.SetMessageType(models.MessageTypeEphemeral)
-		msg.SetUserID(ev.UserID)
+		msg.SetUserID(incomingMessage.UserID)
 		msg.SetText(HintExec)
 
 		if err := s.messenger.Publish(msg); err != nil {

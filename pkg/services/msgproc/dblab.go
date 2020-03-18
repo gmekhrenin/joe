@@ -73,8 +73,8 @@ var hintExplainDmlWords = []string{"insert", "select", "update", "delete", "with
 var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
 
 // runSession starts a user session if not exists.
-func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.User, channelID string) error {
-	sMsg := models.NewMessage(channelID)
+func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.User, incomingMessage models.IncomingMessage) error {
+	sMsg := models.NewMessage(incomingMessage)
 
 	messageText := strings.Builder{}
 
@@ -122,7 +122,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	user.Session.Clone = clone
 	user.Session.CloneConnection = db
 
-	if s.config.Platform.HistoryEnabled {
+	if s.config.Platform.HistoryEnabled && user.Session.PlatformSessionID == "" {
 		if err := s.createPlatformSession(ctx, user, sMsg.ChannelID); err != nil {
 			s.messenger.Fail(sMsg, err.Error())
 			return err

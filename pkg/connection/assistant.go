@@ -16,8 +16,6 @@ type Assistant interface {
 	// Init defines the method to initialize the assistant.
 	Init() error
 
-	SetHandlerPrefix(prefix string)
-
 	// CheckIdleSessions defines the method for checking user idle sessions and notification about them.
 	CheckIdleSessions(context.Context)
 

@@ -21,6 +21,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
+	"gitlab.com/postgres-ai/joe/pkg/connection/webui"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
@@ -31,6 +32,7 @@ const InactiveCloneCheckInterval = time.Minute
 // Workspace types
 const (
 	slackWorkspace = "slack"
+	webUIWorkspace = "webui"
 )
 
 // App defines a application struct.
@@ -128,8 +130,6 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
 
-			assist.SetHandlerPrefix(fmt.Sprintf("/%s", workspaceType))
-
 			if err := a.setupDBLabInstances(assist, workspace); err != nil {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
@@ -142,9 +142,14 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 }
 
 func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
+	handlerPrefix := fmt.Sprintf("/%s", workspaceType)
+
 	switch workspaceType {
 	case slackWorkspace:
-		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config)
+		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
+
+	case webUIWorkspace:
+		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
 
 	default:
 		return nil, errors.New("unknown workspace type given")

@@ -36,28 +36,32 @@ type IncomingMessage struct {
 	UserID      string
 	Timestamp   string
 	ThreadID    string
+	CommandID   string
+	SessionID   string
 }
 
 // Message struct defines an output message.
 type Message struct {
-	MessageID   string
-	MessageType int
-	Status      MessageStatus
-	ChannelID   string
-	ThreadID    string
-	UserID      string
-	Text        string
-	CreatedAt   time.Time
-	NotifyAt    time.Time
+	MessageID   string        `json:"message_id,omitempty"`
+	CommandID   string        `json:"command_id,omitempty"`
+	MessageType int           `json:"-"`
+	Status      MessageStatus `json:"status,omitempty"`
+	ChannelID   string        `json:"channel_id,omitempty"`
+	ThreadID    string        `json:"-"`
+	UserID      string        `json:"-"`
+	Text        string        `json:"text"`
+	CreatedAt   time.Time     `json:"-"`
+	NotifyAt    time.Time     `json:"-"`
 }
 
 // MessageStatus defines status of a message.
 type MessageStatus string
 
 // NewMessage creates a new message.
-func NewMessage(channelID string) *Message {
+func NewMessage(incomingMessage IncomingMessage) *Message {
 	return &Message{
-		ChannelID: channelID,
+		ChannelID: incomingMessage.ChannelID,
+		CommandID: incomingMessage.CommandID,
 		CreatedAt: time.Now(),
 	}
 }
