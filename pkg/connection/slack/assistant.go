@@ -151,6 +151,8 @@ func (a *Assistant) getProcessingService(channelID string) (connection.MessagePr
 
 // CheckIdleSessions check the running user sessions for idleness.
 func (a *Assistant) CheckIdleSessions(ctx context.Context) {
+	log.Dbg("Check idle sessions", a.prefix)
+
 	a.procMu.RLock()
 	for _, proc := range a.msgProcessors {
 		proc.CheckIdleSessions(ctx)

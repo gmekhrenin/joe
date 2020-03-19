@@ -42,16 +42,16 @@ type IncomingMessage struct {
 
 // Message struct defines an output message.
 type Message struct {
-	MessageID   string        `json:"message_id,omitempty"`
-	CommandID   string        `json:"command_id,omitempty"`
-	MessageType int           `json:"-"`
-	Status      MessageStatus `json:"status,omitempty"`
-	ChannelID   string        `json:"channel_id,omitempty"`
-	ThreadID    string        `json:"-"`
-	UserID      string        `json:"-"`
-	Text        string        `json:"text"`
-	CreatedAt   time.Time     `json:"-"`
-	NotifyAt    time.Time     `json:"-"`
+	MessageID   string
+	CommandID   string
+	MessageType int
+	Status      MessageStatus
+	ChannelID   string
+	ThreadID    string
+	UserID      string
+	Text        string
+	CreatedAt   time.Time
+	NotifyAt    time.Time
 }
 
 // MessageStatus defines status of a message.

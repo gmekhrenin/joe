@@ -19,6 +19,7 @@ type Assistant interface {
 	// CheckIdleSessions defines the method for checking user idle sessions and notification about them.
 	CheckIdleSessions(context.Context)
 
+	// AddDBLabInstanceForChannel adds a new Database Lab instance to communication via the assistant.
 	AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) error
 }
 

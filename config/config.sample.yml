@@ -10,6 +10,12 @@ connections:
         - channelID: channelID2
           dblab: dev02
   webui:
+    - name: WebUI
+      credentials:
+        signingSecret: secret_signing
+      channels:
+        - channelID: channelID1
+          dblab: prod1
 
 dblabs:
   prod1:

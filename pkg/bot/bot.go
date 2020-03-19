@@ -68,7 +68,6 @@ func (a *App) RunServer(ctx context.Context) error {
 
 		// Check idle sessions.
 		_ = util.RunInterval(InactiveCloneCheckInterval, func() {
-			log.Dbg("Check idle sessions")
 			assistantSvc.CheckIdleSessions(ctx)
 		})
 	}

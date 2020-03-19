@@ -27,7 +27,14 @@ func NewMessenger(api *platform.Client) *Messenger {
 }
 
 func (m Messenger) postMessage(ctx context.Context, message *models.Message) error {
-	messageID, err := m.api.PostMessage(ctx, message)
+	postMessage := platform.PostMessage{
+		CommandID: message.CommandID,
+		MessageID: message.MessageID,
+		Text:      message.Text,
+		Status:    string(message.Status),
+	}
+
+	messageID, err := m.api.PostMessage(ctx, postMessage)
 	if err != nil {
 		return errors.Wrap(err, "failed to post a message to Platform")
 	}

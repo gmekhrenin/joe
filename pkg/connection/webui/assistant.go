@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
@@ -56,8 +55,8 @@ func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix 
 }
 
 func (a *Assistant) validateCredentials() error {
-	if a.credentialsCfg == nil || a.credentialsCfg.AccessToken == "" || a.credentialsCfg.SigningSecret == "" {
-		return errors.New("access_token and signing_secret must not be empty")
+	if a.credentialsCfg == nil || a.credentialsCfg.SigningSecret == "" {
+		return errors.New("signing_secret must not be empty")
 	}
 
 	return nil
@@ -75,8 +74,10 @@ func (a *Assistant) Init() error {
 		return errors.New("no message processor set")
 	}
 
+	verifier := NewVerifier([]byte(a.credentialsCfg.SigningSecret))
+
 	for path, handleFunc := range a.handlers() {
-		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
+		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), verifier.Handler(handleFunc))
 	}
 
 	return nil
@@ -137,6 +138,8 @@ func (a *Assistant) getProcessingService(channelID string) (connection.MessagePr
 
 // CheckIdleSessions check the running user sessions for idleness.
 func (a *Assistant) CheckIdleSessions(ctx context.Context) {
+	log.Dbg("Check idle sessions", a.prefix)
+
 	a.procMu.RLock()
 	for _, proc := range a.msgProcessors {
 		proc.CheckIdleSessions(ctx)
@@ -153,20 +156,17 @@ func (a *Assistant) lenMessageProcessor() int {
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"verify":   a.verifyHandler,
+		"verify":   a.verificationHandler,
 		"channels": a.channelsHandler,
-		"command":  a.handleMessage,
+		"command":  a.commandHandler,
 	}
 }
 
-func (a *Assistant) verifyHandler(w http.ResponseWriter, r *http.Request) {
-	if err := a.verifyRequest(r); err != nil {
-		log.Dbg("Message filtered: Verification failed:", err.Error())
-		w.WriteHeader(http.StatusForbidden)
+type challengeResponse struct {
+	Challenge string `json:"challenge"`
+}
 
-		return
-	}
-
+func (a *Assistant) verificationHandler(w http.ResponseWriter, r *http.Request) {
 	buf := new(bytes.Buffer)
 	if _, err := buf.ReadFrom(r.Body); err != nil {
 		log.Err("Failed to read the request body:", err)
@@ -175,11 +175,9 @@ func (a *Assistant) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body := buf.Bytes()
+	var resp challengeResponse
 
-	var resp *slackevents.ChallengeResponse
-
-	if err := json.Unmarshal(body, &resp); err != nil {
+	if err := json.Unmarshal(buf.Bytes(), &resp); err != nil {
 		log.Err("Challenge parse error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 
@@ -230,15 +228,8 @@ func (m *Message) ToIncomingMessage() models.IncomingMessage {
 	return incomingMessage
 }
 
-func (a *Assistant) handleMessage(w http.ResponseWriter, r *http.Request) {
+func (a *Assistant) commandHandler(w http.ResponseWriter, r *http.Request) {
 	log.Msg("Request received:", html.EscapeString(r.URL.Path))
-
-	if err := a.verifyRequest(r); err != nil {
-		log.Dbg("Message filtered: Verification failed:", err.Error())
-		w.WriteHeader(http.StatusForbidden)
-
-		return
-	}
 
 	buf := new(bytes.Buffer)
 	if _, err := buf.ReadFrom(r.Body); err != nil {
@@ -267,9 +258,4 @@ func (a *Assistant) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	svc.ProcessMessageEvent(r.Context(), webMessage.ToIncomingMessage())
-}
-
-// verifyRequest verifies a request coming from Platform.
-func (a *Assistant) verifyRequest(r *http.Request) error {
-	return nil
 }

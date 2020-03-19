@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -20,7 +21,6 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
 const (
@@ -94,27 +94,40 @@ func (p *Client) doRequest(ctx context.Context, request *http.Request, parser re
 	return parser(response)
 }
 
-// PostCommand makes an HTTP request to post a command to Platform.
-func (p *Client) PostCommand(ctx context.Context, command *Command) (string, error) {
-	reqData, err := json.Marshal(command)
+func (p *Client) doPost(ctx context.Context, path string, data interface{}, response interface{}) error {
+	reqData, err := json.Marshal(data)
 	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal a command")
+		return errors.Wrap(err, "failed to marshal request")
 	}
 
-	postURL := p.buildURL("/rpc/joe_session_command_post").String()
+	postURL := p.buildURL(path).String()
 
 	r, err := http.NewRequest(http.MethodPost, postURL, bytes.NewBuffer(reqData))
 	if err != nil {
-		return "", errors.Wrap(err, "failed to create a command request")
+		return errors.Wrap(err, "failed to create a request")
 	}
 
+	if err := p.doRequest(ctx, r, newJSONParser(&response)); err != nil {
+		return errors.Wrap(err, "failed to do request")
+	}
+
+	return nil
+}
+
+// PostCommand makes an HTTP request to post a command to Platform.
+func (p *Client) PostCommand(ctx context.Context, command *Command) (string, error) {
+	log.Dbg("Platform API: post command")
+
 	commandResp := PostCommandResponse{}
-	if err := p.doRequest(ctx, r, newJSONParser(&commandResp)); err != nil {
-		return "", err
+
+	if err := p.doPost(ctx, "/rpc/joe_session_command_post", command, &commandResp); err != nil {
+		return "", errors.Wrap(err, "failed to do request")
 	}
 
 	if commandResp.Code != "" || commandResp.Message != "" {
-		return "", errors.Errorf("Error: %v", commandResp)
+		log.Dbg(fmt.Sprintf("Unsuccessful response given. Request: %v", command))
+
+		return "", errors.Errorf("error: %v", commandResp)
 	}
 
 	log.Dbg("API: Post command success", commandResp.CommandID)
@@ -124,64 +137,54 @@ func (p *Client) PostCommand(ctx context.Context, command *Command) (string, err
 
 // CreatePlatformSession makes an HTTP request to create a new Platform session.
 func (p *Client) CreatePlatformSession(ctx context.Context, session Session) (string, error) {
-	log.Dbg("API: Create session")
+	log.Dbg("Platform API: create session")
 
 	session.ProjectName = p.cfg.Project
 
-	reqData, err := json.Marshal(session)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal a command")
-	}
-
-	postURL := p.buildURL("/rpc/joe_session_create").String()
-
-	r, err := http.NewRequest(http.MethodPost, postURL, bytes.NewBuffer(reqData))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create a command request")
-	}
-
 	respData := CreateSessionResponse{}
 
-	if err := p.doRequest(ctx, r, newJSONParser(&respData)); err != nil {
+	if err := p.doPost(ctx, "/rpc/joe_session_create", session, &respData); err != nil {
 		return "", errors.Wrap(err, "failed to do request")
 	}
 
 	if respData.Code != "" || respData.Message != "" {
+		log.Dbg(fmt.Sprintf("Unsuccessful response given. Request: %v", session))
+
 		return "", errors.Errorf("error: %v", respData)
 	}
 
-	log.Dbg("API: Create session success", respData.SessionID)
+	log.Dbg("Platform API: session has been successfully created", respData.SessionID)
 
 	return strconv.FormatUint(uint64(respData.SessionID), 10), nil
 }
 
+// PostMessage defines a message for a Platform posting.
+type PostMessage struct {
+	CommandID string `json:"command_id"`
+	MessageID string `json:"message_id"`
+	Text      string `json:"text"`
+	Status    string `json:"status"`
+}
+
 // PostMessage makes an HTTP request to post a new message to Platform.
-func (p *Client) PostMessage(ctx context.Context, message *models.Message) (string, error) {
-	reqData, err := json.Marshal(message)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal a message")
-	}
-
-	postURL := p.buildURL("/rpc/joe_message_post").String()
-
-	r, err := http.NewRequest(http.MethodPost, postURL, bytes.NewBuffer(reqData))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create a request")
-	}
+func (p *Client) PostMessage(ctx context.Context, message PostMessage) (string, error) {
+	log.Dbg("Platform API: post message")
 
 	respData := PostMessageResponse{}
 
-	if err := p.doRequest(ctx, r, newJSONParser(&respData)); err != nil {
+	if err := p.doPost(ctx, "/rpc/joe_message_post", message, &respData); err != nil {
 		return "", errors.Wrap(err, "failed to do request")
 	}
 
 	if respData.Code != "" || respData.Message != "" {
+		log.Dbg(fmt.Sprintf("Unsuccessful response given. Request: %v", message))
+
 		return "", errors.Errorf("error: %v", respData)
 	}
 
-	log.Dbg("Platform API: Message has been successfully created", respData.MessageID)
+	log.Dbg("Platform API: message has been successfully created", respData.MessageID)
 
-	return strconv.FormatUint(uint64(respData.MessageID), 10), nil
+	return respData.MessageID, nil
 }
 
 // ArtifactUploadParameters represents parameters to upload artifact to Platform.
@@ -193,21 +196,11 @@ type ArtifactUploadParameters struct {
 
 // AddArtifact makes an HTTP request to upload an artifact to Platform.
 func (p *Client) AddArtifact(ctx context.Context, uploadParameters ArtifactUploadParameters) (string, error) {
-	reqData, err := json.Marshal(uploadParameters)
-	if err != nil {
-		return "", errors.Wrap(err, "failed to marshal upload parameters")
-	}
-
-	postURL := p.buildURL("/rpc/joe_message_artifact_post").String()
-
-	r, err := http.NewRequest(http.MethodPost, postURL, bytes.NewBuffer(reqData))
-	if err != nil {
-		return "", errors.Wrap(err, "failed to create a request")
-	}
+	log.Dbg("Platform API: add artifact")
 
 	respData := AddArtifactResponse{}
 
-	if err := p.doRequest(ctx, r, newJSONParser(&respData)); err != nil {
+	if err := p.doPost(ctx, "/rpc/joe_message_artifact_post", uploadParameters, &respData); err != nil {
 		return "", errors.Wrap(err, "failed to do request")
 	}
 
@@ -215,7 +208,7 @@ func (p *Client) AddArtifact(ctx context.Context, uploadParameters ArtifactUploa
 		return "", errors.Errorf("error: %v", respData)
 	}
 
-	log.Dbg("Platform API: Artifact has been successfully uploaded", respData.ArtifactLink)
+	log.Dbg("Platform API: artifact has been successfully uploaded", respData.ArtifactLink)
 
 	return respData.ArtifactLink, nil
 }
@@ -270,7 +263,7 @@ type PostCommandResponse struct {
 // PostMessageResponse represents a response of a posting message request.
 type PostMessageResponse struct {
 	APIResponse
-	MessageID uint `json:"message_id"`
+	MessageID string `json:"message_id"`
 }
 
 // AddArtifactResponse represents a response of an artifact uploading.
