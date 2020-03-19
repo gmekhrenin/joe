@@ -29,6 +29,9 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
+// WorkspaceType defines a workspace type.
+const WorkspaceType = "webui"
+
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
 	credentialsCfg *config.Credentials
@@ -188,6 +191,19 @@ func (a *Assistant) verifyHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Assistant) channelsHandler(w http.ResponseWriter, r *http.Request) {
+	channels := []config.Workspace{}
+
+	work, ok := a.appCfg.Space.Connections[WorkspaceType]
+	if ok {
+		channels = append(channels, work...)
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if err := json.NewEncoder(w).Encode(channels); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 // Message represents commands coming from Platform.

@@ -109,6 +109,7 @@ func main() {
 			Project:        opts.PlatformProject,
 			HistoryEnabled: opts.HistoryEnabled,
 		},
+		Space: spaceCfg,
 	}
 
 	joeBot := bot.NewApp(botCfg, spaceCfg)

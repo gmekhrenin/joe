@@ -30,6 +30,9 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
+// WorkspaceType defines a workspace type.
+const WorkspaceType = "slack"
+
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
 	credentialsCfg *config.Credentials

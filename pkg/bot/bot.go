@@ -20,7 +20,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
+	"gitlab.com/postgres-ai/joe/pkg/connection/slack"
 	"gitlab.com/postgres-ai/joe/pkg/connection/webui"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/util"
@@ -28,12 +28,6 @@ import (
 
 // InactiveCloneCheckInterval defines an interval for check of idleness sessions.
 const InactiveCloneCheckInterval = time.Minute
-
-// Workspace types
-const (
-	slackWorkspace = "slack"
-	webUIWorkspace = "webui"
-)
 
 // App defines a application struct.
 type App struct {
@@ -145,10 +139,10 @@ func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) 
 	handlerPrefix := fmt.Sprintf("/%s", workspaceType)
 
 	switch workspaceType {
-	case slackWorkspace:
-		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
+	case slack.WorkspaceType:
+		return slack.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
 
-	case webUIWorkspace:
+	case webui.WorkspaceType:
 		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
 
 	default:

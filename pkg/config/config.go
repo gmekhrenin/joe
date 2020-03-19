@@ -22,6 +22,7 @@ type Config struct {
 	AuditEnabled             bool
 	MinNotifyDurationMinutes uint
 	Platform                 Platform
+	Space                    *Space
 }
 
 // App defines a general application configuration.
@@ -62,9 +63,9 @@ type DBLabInstance struct {
 
 // Workspace defines a connection space.
 type Workspace struct {
-	Name        string      `yaml:"name"`
-	Credentials Credentials `yaml:"credentials"`
-	Channels    []Channel   `yaml:"channels"`
+	Name        string      `yaml:"name" json:"project"`
+	Credentials Credentials `yaml:"credentials" json:"-"`
+	Channels    []Channel   `yaml:"channels" json:"channels"`
 }
 
 // Credentials defines connection space credentials.
@@ -75,8 +76,8 @@ type Credentials struct {
 
 // Channel defines a connection channel configuration.
 type Channel struct {
-	ChannelID string `yaml:"channelID"`
-	DBLabID   string `yaml:"dblab"`
+	ChannelID string `yaml:"channelID" json:"channel_id"`
+	DBLabID   string `yaml:"dblab" json:"-"`
 }
 
 // Load loads configuration from file.
