@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -30,6 +31,9 @@ import (
 
 // WorkspaceType defines a workspace type.
 const WorkspaceType = "webui"
+
+// maxMessageProcessingDuration defines a timeout for an incoming message processing.
+const maxMessageProcessingDuration = time.Minute
 
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
@@ -261,5 +265,8 @@ func (a *Assistant) commandHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	svc.ProcessMessageEvent(r.Context(), webMessage.ToIncomingMessage())
+	ctx, cancel := context.WithTimeout(r.Context(), maxMessageProcessingDuration)
+	defer cancel()
+
+	go svc.ProcessMessageEvent(ctx, webMessage.ToIncomingMessage())
 }
