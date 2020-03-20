@@ -10,6 +10,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -45,7 +46,7 @@ type Command struct {
 
 	Error string `json:"error"`
 
-	Timestamp string `json:"slack_ts"`
+	Timestamp string `json:"timestamp"`
 }
 
 // Client provides a Platform API client.
@@ -88,6 +89,9 @@ func (p *Client) doRequest(ctx context.Context, request *http.Request, parser re
 	defer func() { _ = response.Body.Close() }()
 
 	if response.StatusCode != http.StatusOK {
+		body, _ := ioutil.ReadAll(response.Body)
+		log.Dbg(fmt.Sprintf("Response: %v", string(body)))
+
 		return errors.Errorf("unsuccessful status given: %d", response.StatusCode)
 	}
 
@@ -101,6 +105,8 @@ func (p *Client) doPost(ctx context.Context, path string, data interface{}, resp
 	}
 
 	postURL := p.buildURL(path).String()
+
+	log.Dbg(fmt.Sprintf("Request: %v", string(reqData)))
 
 	r, err := http.NewRequest(http.MethodPost, postURL, bytes.NewBuffer(reqData))
 	if err != nil {
@@ -235,9 +241,9 @@ func newJSONParser(v interface{}) responseParser {
 type Session struct {
 	ProjectName string `json:"project_name"`
 	AccessToken string `json:"access_token"`
-	UserID      string `json:"slack_uid"`
-	Username    string `json:"slack_username"`
-	ChannelID   string `json:"slack_channel"`
+	UserID      string `json:"user_id"`
+	Username    string `json:"user_name"`
+	ChannelID   string `json:"channel_id"`
 }
 
 // APIResponse represents common fields of an API response.

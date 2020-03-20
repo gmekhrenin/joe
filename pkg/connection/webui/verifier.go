@@ -20,7 +20,7 @@ import (
 
 // Verification constants.
 const (
-	VerificationSignatureKey = "Verification-Token"
+	VerificationSignatureKey = "Verification-Signature"
 	signaturePrefix          = "v0="
 	bodyPrefix               = "v0:"
 )
