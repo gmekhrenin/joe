@@ -66,9 +66,10 @@ func (a *App) RunServer(ctx context.Context) error {
 			return errors.Wrap(err, "failed to init an assistant")
 		}
 
+		svc := assistantSvc
 		// Check idle sessions.
 		_ = util.RunInterval(InactiveCloneCheckInterval, func() {
-			assistantSvc.CheckIdleSessions(ctx)
+			svc.CheckIdleSessions(ctx)
 		})
 	}
 

@@ -21,17 +21,21 @@ import (
 // Verification constants.
 const (
 	VerificationSignatureKey = "Verification-Token"
-	SignaturePrefix          = "v0="
+	signaturePrefix          = "v0="
+	bodyPrefix               = "v0:"
 )
 
 // Verifier provides a Platform requests verifier.
 type Verifier struct {
-	secret []byte
+	bodyPrefix []byte
+	secret     []byte
 }
 
 // NewVerifier provides a new verifier.
 func NewVerifier(secret []byte) *Verifier {
-	return &Verifier{secret: secret}
+	bodyPrefix := []byte(bodyPrefix)
+
+	return &Verifier{bodyPrefix: bodyPrefix, secret: secret}
 }
 
 // Handler provides a middleware to verify incoming requests.
@@ -55,7 +59,7 @@ func (a *Verifier) verifyRequest(r *http.Request) error {
 		return errors.Errorf("%q not found", VerificationSignatureKey)
 	}
 
-	signature, err := hex.DecodeString(strings.TrimPrefix(verificationSignature, SignaturePrefix))
+	signature, err := hex.DecodeString(strings.TrimPrefix(verificationSignature, signaturePrefix))
 	if err != nil {
 		return errors.Wrap(err, "failed to decode a request signature")
 	}
@@ -68,7 +72,7 @@ func (a *Verifier) verifyRequest(r *http.Request) error {
 	// Set a body with the same data we read.
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-	if !validMAC(body, signature, a.secret) {
+	if !a.validMAC(body, signature) {
 		return errors.Errorf("invalid %q given", VerificationSignatureKey)
 	}
 
@@ -76,9 +80,10 @@ func (a *Verifier) verifyRequest(r *http.Request) error {
 }
 
 // validMAC reports whether signature is a valid HMAC tag for request body.
-func validMAC(body, signature, signingSecret []byte) bool {
-	mac := hmac.New(sha256.New, signingSecret)
-	mac.Write(body) // nolint: errcheck
+func (a *Verifier) validMAC(body, signature []byte) bool {
+	mac := hmac.New(sha256.New, a.secret)
+	mac.Write(a.bodyPrefix) // nolint: errcheck
+	mac.Write(body)         // nolint: errcheck
 
 	expectedMAC := mac.Sum(nil)
 

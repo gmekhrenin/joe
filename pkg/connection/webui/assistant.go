@@ -184,8 +184,12 @@ func (a *Assistant) verificationHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	w.Header().Set("Content-Type", "text")
-	_, _ = w.Write([]byte(resp.Challenge))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (a *Assistant) channelsHandler(w http.ResponseWriter, r *http.Request) {
