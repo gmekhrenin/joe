@@ -9,7 +9,6 @@ connections:
           dblab: prod1
         - channelID: channelID2
           dblab: dev02
-  webui:
 
 dblabs:
   prod1:
