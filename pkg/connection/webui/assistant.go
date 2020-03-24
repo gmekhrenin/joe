@@ -193,14 +193,19 @@ func (a *Assistant) verificationHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *Assistant) channelsHandler(w http.ResponseWriter, r *http.Request) {
-	channels := []config.Workspace{}
-
-	work, ok := a.appCfg.Space.Connections[WorkspaceType]
-	if ok {
-		channels = append(channels, work...)
-	}
+	channels := []config.Channel{}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	work, ok := a.appCfg.Space.Connections[WorkspaceType]
+
+	// For now, we will use only the first entry in the config.
+	if !ok || len(work) == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	channels = append(channels, work[0].Channels...)
 
 	if err := json.NewEncoder(w).Encode(channels); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
