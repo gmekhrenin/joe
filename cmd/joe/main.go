@@ -23,6 +23,7 @@ import (
 
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
+	"gitlab.com/postgres-ai/joe/pkg/ee/command/builder"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 )
 
@@ -111,7 +112,9 @@ func main() {
 		},
 	}
 
-	joeBot := bot.NewApp(botCfg, spaceCfg)
+	enterprise := bot.NewEnterprise(builder.NewBuilder())
+
+	joeBot := bot.NewApp(botCfg, spaceCfg, enterprise)
 	if err := joeBot.RunServer(context.Background()); err != nil {
 		log.Err("HTTP server error:", err)
 	}

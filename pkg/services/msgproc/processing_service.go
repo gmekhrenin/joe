@@ -33,12 +33,13 @@ import (
 
 // Constants declare supported commands.
 const (
-	CommandExplain = "explain"
-	CommandExec    = "exec"
-	CommandReset   = "reset"
-	CommandHelp    = "help"
-	CommandHypo    = "hypo"
-	CommandPlan    = "plan"
+	CommandExplain  = "explain"
+	CommandExec     = "exec"
+	CommandReset    = "reset"
+	CommandHelp     = "help"
+	CommandHypo     = "hypo"
+	CommandActivity = "activity"
+	CommandPlan     = "plan"
 
 	CommandPsqlD   = `\d`
 	CommandPsqlDP  = `\d+`
@@ -92,6 +93,7 @@ var allowedPsqlCommands = []string{
 }
 
 type ProcessingService struct {
+	commandBuilder   ee.Builder
 	messageValidator connection.MessageValidator
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
@@ -116,8 +118,9 @@ var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, cfg ProcessingConfig) *ProcessingService {
+	userSvc *usermanager.UserManager, cfg ProcessingConfig, cmdBuilder ee.Builder) *ProcessingService {
 	return &ProcessingService{
+		commandBuilder:   cmdBuilder,
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
@@ -314,6 +317,9 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		case receivedCommand == CommandHypo:
 			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
+		case receivedCommand == CommandActivity:
+			activityCmd := s.commandBuilder.BuildActivityCmd(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+			err = activityCmd.Execute()
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)

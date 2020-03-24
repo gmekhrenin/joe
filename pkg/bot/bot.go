@@ -21,6 +21,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	slackConnection "gitlab.com/postgres-ai/joe/pkg/connection/slack"
+	"gitlab.com/postgres-ai/joe/pkg/ee"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/util"
 )
@@ -35,20 +36,32 @@ const (
 
 // App defines a application struct.
 type App struct {
-	Config   config.Config
-	spaceCfg *config.Space
+	Config     config.Config
+	spaceCfg   *config.Space
+	enterprise *Enterprise
 
 	dblabMu        *sync.RWMutex
 	dblabInstances map[string]*dblab.Instance
 }
 
+// Enterprise defines enterprise feature helpers.
+type Enterprise struct {
+	cmdBuilder ee.Builder
+}
+
+// NewEnterprise creates a new Enterprise struct.
+func NewEnterprise(cmdBuilder ee.Builder) *Enterprise {
+	return &Enterprise{cmdBuilder: cmdBuilder}
+}
+
 // Creates a new application.
-func NewApp(cfg config.Config, spaceCfg *config.Space) *App {
+func NewApp(cfg config.Config, spaceCfg *config.Space, enterprise *Enterprise) *App {
 	bot := App{
 		Config:         cfg,
 		spaceCfg:       spaceCfg,
 		dblabMu:        &sync.RWMutex{},
 		dblabInstances: make(map[string]*dblab.Instance, len(spaceCfg.DBLabInstances)),
+		enterprise:     enterprise,
 	}
 
 	return &bot
@@ -144,7 +157,7 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
 	switch workspaceType {
 	case slackWorkspace:
-		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config)
+		return slackConnection.NewAssistant(&workspaceCfg.Credentials, &a.Config, a.enterprise.cmdBuilder)
 
 	default:
 		return nil, errors.New("unknown workspace type given")
