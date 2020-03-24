@@ -63,9 +63,9 @@ type DBLabInstance struct {
 
 // Workspace defines a connection space.
 type Workspace struct {
-	Name        string      `yaml:"name" json:"project"`
-	Credentials Credentials `yaml:"credentials" json:"-"`
-	Channels    []Channel   `yaml:"channels" json:"channels"`
+	Name        string      `yaml:"name"`
+	Credentials Credentials `yaml:"credentials"`
+	Channels    []Channel   `yaml:"channels"`
 }
 
 // Credentials defines connection space credentials.
