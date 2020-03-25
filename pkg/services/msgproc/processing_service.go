@@ -248,7 +248,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if receivedCommand == CommandHelp {
 		msg := models.NewMessage(incomingMessage.ChannelID)
 
-		msgText = s.appendHelp(msgText, s.config.App.Version)
+		msgText = s.appendHelp(msgText)
 		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
@@ -417,8 +417,18 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 }
 
-func (s *ProcessingService) appendHelp(text string, version string) string {
-	return text + HelpMessage + s.commandBuilder.GetEnterpriseHelpMessage() + fmt.Sprintf("Version: %s\n", version)
+func (s *ProcessingService) appendHelp(text string) string {
+	sb := strings.Builder{}
+
+	sb.WriteString(text)
+	sb.WriteString(HelpMessage)
+	sb.WriteString(s.commandBuilder.GetEnterpriseHelpMessage())
+
+	sb.WriteString("Version: ")
+	sb.WriteString(s.config.App.Version)
+	sb.WriteString("\n")
+
+	return sb.String()
 }
 
 // TODO(akartasov): refactor to slice of bytes.
