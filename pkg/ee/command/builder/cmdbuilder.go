@@ -30,3 +30,8 @@ func NewBuilder() *Builder {
 func (builder *Builder) BuildActivityCmd(_ *api.ApiCommand, _ *models.Message, _ *sql.DB, _ connection.Messenger) ee.Executor {
 	return &command.ActivityCmd{}
 }
+
+// BuildTerminateCmd build a new Terminate command.
+func (builder *Builder) BuildTerminateCmd(_ *api.ApiCommand, _ *models.Message, _ *sql.DB, _ connection.Messenger) ee.Executor {
+	return &command.TerminateCmd{}
+}

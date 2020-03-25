@@ -32,3 +32,9 @@ func (b *EnterpriseBuilder) BuildActivityCmd(apiCmd *api.ApiCommand, msg *models
 	msgSvc connection.Messenger) ee.Executor {
 	return command.NewActivityCmd(apiCmd, msg, db, msgSvc)
 }
+
+// BuildTerminateCmd builds a new activity command.
+func (b *EnterpriseBuilder) BuildTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB,
+	msgSvc connection.Messenger) ee.Executor {
+	return command.NewTerminateCmd(apiCmd, msg, db, msgSvc)
+}

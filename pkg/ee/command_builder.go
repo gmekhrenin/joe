@@ -15,6 +15,7 @@ import (
 // Builder describes a builder for enterprise commands.
 type Builder interface {
 	BuildActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) Executor
+	BuildTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) Executor
 }
 
 // Executor describes a command interface.
