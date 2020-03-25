@@ -17,6 +17,8 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
+const featuresDescription = ""
+
 // Builder represents a builder for non enterprise activity command.
 type Builder struct {
 }
@@ -34,4 +36,9 @@ func (builder *Builder) BuildActivityCmd(_ *api.ApiCommand, _ *models.Message, _
 // BuildTerminateCmd build a new Terminate command.
 func (builder *Builder) BuildTerminateCmd(_ *api.ApiCommand, _ *models.Message, _ *sql.DB, _ connection.Messenger) ee.Executor {
 	return &command.TerminateCmd{}
+}
+
+// GetEnterpriseHelpMessage provides description enterprise features.
+func (builder *Builder) GetEnterpriseHelpMessage() string {
+	return featuresDescription
 }

@@ -248,7 +248,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if receivedCommand == CommandHelp {
 		msg := models.NewMessage(incomingMessage.ChannelID)
 
-		msgText = appendHelp(msgText, s.config.App.Version)
+		msgText = s.appendHelp(msgText, s.config.App.Version)
 		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
@@ -417,6 +417,10 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 }
 
+func (s *ProcessingService) appendHelp(text string, version string) string {
+	return text + HelpMessage + s.commandBuilder.GetEnterpriseHelpMessage() + fmt.Sprintf("Version: %s\n", version)
+}
+
 // TODO(akartasov): refactor to slice of bytes.
 func formatMessage(msg string) string {
 	// Slack escapes some characters
@@ -450,8 +454,4 @@ func appendSessionID(text string, u *usermanager.User) string {
 	}
 
 	return text + s
-}
-
-func appendHelp(text string, version string) string {
-	return text + HelpMessage + fmt.Sprintf("Version: %s\n", version)
 }

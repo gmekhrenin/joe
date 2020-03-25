@@ -18,6 +18,8 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
+const featuresDescription = ""
+
 // EnterpriseBuilder defines an enterprise command builder.
 type EnterpriseBuilder struct {
 }
@@ -37,4 +39,9 @@ func (b *EnterpriseBuilder) BuildActivityCmd(apiCmd *api.ApiCommand, msg *models
 func (b *EnterpriseBuilder) BuildTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB,
 	msgSvc connection.Messenger) ee.Executor {
 	return command.NewTerminateCmd(apiCmd, msg, db, msgSvc)
+}
+
+// GetEnterpriseHelpMessage provides description enterprise features.
+func (builder *EnterpriseBuilder) GetEnterpriseHelpMessage() string {
+	return featuresDescription
 }
