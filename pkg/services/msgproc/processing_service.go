@@ -33,13 +33,14 @@ import (
 
 // Constants declare supported commands.
 const (
-	CommandExplain  = "explain"
-	CommandExec     = "exec"
-	CommandReset    = "reset"
-	CommandHelp     = "help"
-	CommandHypo     = "hypo"
-	CommandActivity = "activity"
-	CommandPlan     = "plan"
+	CommandExplain   = "explain"
+	CommandExec      = "exec"
+	CommandReset     = "reset"
+	CommandHelp      = "help"
+	CommandHypo      = "hypo"
+	CommandActivity  = "activity"
+	CommandTerminate = "terminate"
+	CommandPlan      = "plan"
 
 	CommandPsqlD   = `\d`
 	CommandPsqlDP  = `\d+`
@@ -317,9 +318,14 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		case receivedCommand == CommandHypo:
 			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
+
 		case receivedCommand == CommandActivity:
 			activityCmd := s.commandBuilder.BuildActivityCmd(apiCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = activityCmd.Execute()
+
+		case receivedCommand == CommandTerminate:
+			terminateCmd := s.commandBuilder.BuildTerminateCmd(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+			err = terminateCmd.Execute()
 
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
