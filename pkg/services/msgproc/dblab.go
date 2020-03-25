@@ -98,7 +98,11 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	sessionID := user.Session.PlatformSessionID
 
 	if sessionID == "" {
-		sessionID = generateSessionID()
+		if incomingMessage.SessionID != "" {
+			sessionID = incomingMessage.SessionID
+		} else {
+			sessionID = generateSessionID()
+		}
 	}
 
 	clone, err := s.createDBLabClone(ctx, user, sessionID)
@@ -136,6 +140,8 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 			s.messenger.Fail(sMsg, err.Error())
 			return err
 		}
+
+		user.Session.PlatformSessionID = sessionID
 	}
 
 	sMsg.AppendText(fmt.Sprintf("Session started: `%s`", sessionID))
@@ -216,8 +222,8 @@ func (s *ProcessingService) createPlatformSession(ctx context.Context, user *use
 		Username:    user.UserInfo.Name,
 		ChannelID:   channelID,
 	}
-	sessionID, err := s.platformManager.CreatePlatformSession(ctx, platformSession)
-	if err != nil {
+
+	if _, err := s.platformManager.CreatePlatformSession(ctx, platformSession); err != nil {
 		log.Err("API: Create platform session:", err)
 
 		if err := s.destroySession(user); err != nil {
@@ -226,8 +232,6 @@ func (s *ProcessingService) createPlatformSession(ctx context.Context, user *use
 
 		return errors.Wrap(err, "failed to create a platform session")
 	}
-
-	user.Session.PlatformSessionID = sessionID
 
 	return nil
 }
