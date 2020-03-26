@@ -26,8 +26,8 @@ import (
 	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 )
 
 // HelpMessage defines available commands provided with the help message.
@@ -80,14 +80,14 @@ var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
 func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.User, channelID string) error {
 	sMsg := models.NewMessage(channelID)
 
-	messageText := strings.Builder{}
-
 	if user.Session.Clone != nil {
 		return nil
 	}
 
 	// Stop clone session if not active.
 	s.stopSession(user)
+
+	messageText := strings.Builder{}
 
 	messageText.WriteString(MsgSessionStarting)
 	sMsg.SetText(messageText.String())
@@ -125,6 +125,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	user.Session.ConnParams = dblabClone
 	user.Session.Clone = clone
 	user.Session.CloneConnection = db
+	user.Session.LastActionTs = time.Now()
 
 	if s.Config.HistoryEnabled {
 		if err := s.createPlatformSession(user, sMsg.ChannelID); err != nil {
