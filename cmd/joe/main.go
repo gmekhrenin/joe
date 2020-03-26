@@ -54,7 +54,7 @@ var opts struct {
 }
 
 // TODO (akartasov): Set the app version during build.
-const Version = "v0.6.1-rc1"
+const Version = "v0.7.0"
 
 // TODO(anatoly): Refactor configs and envs.
 
