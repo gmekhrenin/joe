@@ -24,8 +24,9 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/ee"
-	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
 )
@@ -95,7 +96,7 @@ type ProcessingService struct {
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
 	UserManager      *usermanager.UserManager
-	Config           config.Bot
+	config           ProcessingConfig
 
 	// TODO (akartasov): Add specific services.
 	//PlatformManager
@@ -103,17 +104,25 @@ type ProcessingService struct {
 	//Limiter
 }
 
+// ProcessingConfig declares a configuration of Processing Service.
+type ProcessingConfig struct {
+	App      config.App
+	Platform config.Platform
+	Explain  pgexplain.ExplainConfig
+	DBLab    config.DBLabInstance
+}
+
 var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, cfg config.Bot) *ProcessingService {
+	userSvc *usermanager.UserManager, cfg ProcessingConfig) *ProcessingService {
 	return &ProcessingService{
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
 		UserManager:      userSvc,
-		Config:           cfg,
+		config:           cfg,
 	}
 }
 
@@ -138,9 +147,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		return
 	}
 
-	if !util.Contains(user.Session.ChannelIDs, incomingMessage.ChannelID) {
-		user.Session.ChannelIDs = append(user.Session.ChannelIDs, incomingMessage.ChannelID)
-	}
+	user.Session.ChannelID = incomingMessage.ChannelID
 
 	// Filter and prepare message.
 	message := strings.TrimSpace(incomingMessage.Text)
@@ -209,7 +216,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	queryPreview = strings.ReplaceAll(queryPreview, "\t", " ")
 	queryPreview, _ = text.CutText(queryPreview, QueryPreviewSize, SeparatorEllipsis)
 
-	if s.Config.AuditEnabled {
+	if s.config.App.AuditEnabled {
 		audit, err := json.Marshal(ee.Audit{
 			ID:       user.UserInfo.ID,
 			Name:     user.UserInfo.Name,
@@ -236,7 +243,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if receivedCommand == CommandHelp {
 		msg := models.NewMessage(incomingMessage.ChannelID)
 
-		msgText = appendHelp(msgText, s.Config.Version)
+		msgText = appendHelp(msgText, s.config.App.Version)
 		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
@@ -264,7 +271,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		return
 	}
 
-	remindDuration := time.Duration(s.Config.MinNotifyDurationMinutes) * time.Minute
+	remindDuration := time.Duration(s.config.App.MinNotifyDurationMinutes) * time.Minute
 	if err := msg.SetNotifyAt(remindDuration); err != nil {
 		log.Err(err)
 	}
@@ -276,8 +283,8 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 
 	apiCmd := &api.ApiCommand{
-		AccessToken: s.Config.ApiToken,
-		ApiURL:      s.Config.ApiUrl,
+		AccessToken: s.config.Platform.Token,
+		ApiURL:      s.config.Platform.URL,
 		SessionId:   user.Session.PlatformSessionID,
 		Command:     receivedCommand,
 		Query:       query,
@@ -290,7 +297,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
 		switch {
 		case receivedCommand == CommandExplain:
-			err = command.Explain(s.messenger, apiCmd, msg, s.Config, user.Session.CloneConnection)
+			err = command.Explain(s.messenger, apiCmd, msg, s.config.Explain, user.Session.CloneConnection)
 
 		case receivedCommand == CommandPlan:
 			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
@@ -339,7 +346,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		break
 	}
 
-	if s.Config.HistoryEnabled {
+	if s.config.Platform.HistoryEnabled {
 		if _, err := apiCmd.Post(); err != nil {
 			log.Err(err)
 			s.messenger.Fail(msg, err.Error())
