@@ -266,5 +266,5 @@ func (a *Assistant) commandHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go svc.ProcessMessageEvent(r.Context(), webMessage.ToIncomingMessage())
+	go svc.ProcessMessageEvent(context.TODO(), webMessage.ToIncomingMessage())
 }
