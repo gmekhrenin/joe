@@ -95,15 +95,12 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	s.messenger.UpdateStatus(sMsg, models.StatusRunning)
 
-	sessionID := user.Session.PlatformSessionID
-
-	if sessionID == "" {
-		if incomingMessage.SessionID != "" {
-			sessionID = incomingMessage.SessionID
-		} else {
-			sessionID = generateSessionID()
-		}
+	sessionID := generateSessionID()
+	if incomingMessage.SessionID != "" {
+		sessionID = incomingMessage.SessionID
 	}
+
+	user.Session.PlatformSessionID = sessionID
 
 	clone, err := s.createDBLabClone(ctx, user, sessionID)
 	if err != nil {
@@ -135,13 +132,11 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	user.Session.Clone = clone
 	user.Session.CloneConnection = db
 
-	if s.config.Platform.HistoryEnabled && user.Session.PlatformSessionID == "" && incomingMessage.SessionID == "" {
+	if s.config.Platform.HistoryEnabled && incomingMessage.SessionID == "" {
 		if err := s.createPlatformSession(ctx, user, sMsg.ChannelID); err != nil {
 			s.messenger.Fail(sMsg, err.Error())
 			return err
 		}
-
-		user.Session.PlatformSessionID = sessionID
 	}
 
 	sMsg.AppendText(fmt.Sprintf("Session started: `%s`", sessionID))
@@ -223,7 +218,8 @@ func (s *ProcessingService) createPlatformSession(ctx context.Context, user *use
 		ChannelID:   channelID,
 	}
 
-	if _, err := s.platformManager.CreatePlatformSession(ctx, platformSession); err != nil {
+	sessionID, err := s.platformManager.CreatePlatformSession(ctx, platformSession)
+	if err != nil {
 		log.Err("API: Create platform session:", err)
 
 		if err := s.destroySession(user); err != nil {
@@ -232,6 +228,8 @@ func (s *ProcessingService) createPlatformSession(ctx context.Context, user *use
 
 		return errors.Wrap(err, "failed to create a platform session")
 	}
+
+	user.Session.PlatformSessionID = sessionID
 
 	return nil
 }
