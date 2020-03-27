@@ -11,22 +11,25 @@ import (
 	"database/sql"
 	"fmt"
 
+	"gitlab.com/postgres-ai/joe/features"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 )
 
-// TerminateCmd defines the terminate command.
-type TerminateCmd struct {
+// ActivityCmd defines the activity command.
+type ActivityCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
 	db         *sql.DB
 	messenger  connection.Messenger
 }
 
-// NewTerminateCmd return a new terminate command.
-func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *TerminateCmd {
-	return &TerminateCmd{
+var _ features.Executor = (*ActivityCmd)(nil)
+
+// NewActivityCmd return a new exec command.
+func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ActivityCmd {
+	return &ActivityCmd{
 		apiCommand: apiCmd,
 		message:    msg,
 		db:         db,
@@ -34,8 +37,8 @@ func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, me
 	}
 }
 
-// Execute runs the terminate command.
-func (c *TerminateCmd) Execute() error {
+// Execute runs the activity command.
+func (c *ActivityCmd) Execute() error {
 	fmt.Println("EE")
 	return nil
 }

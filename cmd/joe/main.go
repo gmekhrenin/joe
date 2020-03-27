@@ -14,12 +14,15 @@ import (
 	"fmt"
 
 	"github.com/jessevdk/go-flags"
+	"github.com/pkg/errors"
+
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
+	"gitlab.com/postgres-ai/joe/features"
+	_ "gitlab.com/postgres-ai/joe/features/ce"
+	_ "gitlab.com/postgres-ai/joe/features/ee"
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
-	"gitlab.com/postgres-ai/joe/pkg/ee/command/builder"
-	"gitlab.com/postgres-ai/joe/pkg/ee/options"
 )
 
 var opts struct {
@@ -42,9 +45,6 @@ var opts struct {
 	Debug bool `long:"debug" description:"Enable a debug mode"`
 
 	ShowHelp func() error `long:"help" description:"Show this help message"`
-
-	// Enterprise features (changing these options you confirm that you have active subscription to Postgres.ai Platform Enterprise Edition https://postgres.ai).
-	Enterprise options.Enterprise `group:"Enterprise Options" env-namespace:"EE"`
 }
 
 // TODO (akartasov): Set the app version during build.
@@ -53,10 +53,10 @@ const Version = "v0.6.1-rc1"
 // TODO(anatoly): Refactor configs and envs.
 
 func main() {
-	// Load CLI options.
-	var _, err = parseArgs()
+	enterpriseFlagProvider := features.GetFlagProvider()
 
-	if err != nil {
+	// Load CLI options.
+	if _, err := parseArgs(enterpriseFlagProvider); err != nil {
 		if flags.WroteHelp(err) {
 			return
 		}
@@ -85,17 +85,19 @@ func main() {
 		log.Fatal(err)
 	}
 
+	enterpriseOptions := enterpriseFlagProvider.ToOpts()
+
 	botCfg := config.Config{
 		App: config.App{
 			Version:                  version,
 			Port:                     opts.ServerPort,
-			AuditEnabled:             opts.Enterprise.AuditEnabled,
+			AuditEnabled:             enterpriseOptions.AuditEnabled,
 			MinNotifyDurationMinutes: opts.MinNotifyDuration,
 		},
 		Explain: explainConfig,
 		Quota: config.Quota{
-			Limit:    opts.Enterprise.QuotaLimit,
-			Interval: opts.Enterprise.QuotaInterval,
+			Limit:    enterpriseOptions.QuotaLimit,
+			Interval: enterpriseOptions.QuotaInterval,
 		},
 
 		Platform: config.Platform{
@@ -106,7 +108,7 @@ func main() {
 		},
 	}
 
-	enterprise := bot.NewEnterprise(builder.NewBuilder())
+	enterprise := bot.NewEnterprise(features.GetBuilder())
 
 	joeBot := bot.NewApp(botCfg, spaceCfg, enterprise)
 	if err := joeBot.RunServer(context.Background()); err != nil {
@@ -114,8 +116,16 @@ func main() {
 	}
 }
 
-func parseArgs() ([]string, error) {
+func parseArgs(ent features.FlagProvider) ([]string, error) {
 	var optParser = flags.NewParser(&opts, flags.Default & ^flags.HelpFlag)
+
+	entGroup, err := optParser.AddGroup("Enterprise Options",
+		"Available only for Postgres.ai Platform Enterprise Edition https://postgres.ai", ent)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to init Enterprise options")
+	}
+
+	entGroup.EnvNamespace = "EE"
 
 	// jessevdk/go-flags lib doesn't allow to use short flag -h because it's binded to usage help.
 	// We need to hack it a bit to use -h for as a hostname option. See https://github.com/jessevdk/go-flags/issues/240
