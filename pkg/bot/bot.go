@@ -44,7 +44,7 @@ type App struct {
 	dblabInstances map[string]*dblab.Instance
 }
 
-// Enterprise defines enterprise feature helpers.
+// EEFeatures defines enterprise feature helpers.
 type EEFeatures struct {
 	cmdBuilder features.CommandFactoryMethod
 }
