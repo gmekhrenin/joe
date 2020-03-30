@@ -39,6 +39,6 @@ func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, me
 
 // Execute runs the terminate command.
 func (c *TerminateCmd) Execute() error {
-	fmt.Println("EE")
+	fmt.Println("EE not implemented yet")
 	return nil
 }
