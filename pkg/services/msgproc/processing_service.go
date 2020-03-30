@@ -20,6 +20,7 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
 
 	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/config"
@@ -420,7 +421,7 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 }
 
-func (s *ProcessingService) appendHelp(helper features.EnterpriseHelpMessenger, text string) string {
+func (s *ProcessingService) appendHelp(helper definition.EnterpriseHelpMessenger, text string) string {
 	sb := strings.Builder{}
 
 	sb.WriteString(text)

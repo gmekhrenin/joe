@@ -8,14 +8,14 @@ package command
 import (
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 )
 
 // TerminateCmd defines the terminate command.
 type TerminateCmd struct {
 }
 
-var _ features.Executor = (*TerminateCmd)(nil)
+var _ definition.Executor = (*TerminateCmd)(nil)
 
 // Execute runs the terminate command.
 func (c *TerminateCmd) Execute() error {

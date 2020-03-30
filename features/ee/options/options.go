@@ -8,7 +8,7 @@
 package options
 
 import (
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 )
 
 // Extra provides Enterprise configuration flags.
@@ -20,11 +20,11 @@ type Extra struct {
 	AuditEnabled  bool `long:"audit-enabled" description:"enable logging of received commands" env:"AUDIT_ENABLED"`
 }
 
-var _ features.FlagProvider = (*Extra)(nil)
+var _ definition.FlagProvider = (*Extra)(nil)
 
 // ToOpts returns the EnterpriseOptions struct.
-func (e *Extra) ToOpts() features.EnterpriseOptions {
-	return features.EnterpriseOptions{
+func (e *Extra) ToOpts() definition.EnterpriseOptions {
+	return definition.EnterpriseOptions{
 		QuotaLimit:    e.QuotaLimit,
 		QuotaInterval: e.QuotaInterval,
 		AuditEnabled:  e.AuditEnabled,

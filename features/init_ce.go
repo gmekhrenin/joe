@@ -4,17 +4,16 @@
 2019 © Postgres.ai
 */
 
-// Package ce provides mocks of Enterprise features.
-package ce
+// Package features provides Enterprise features and their mocks.
+package features
 
 import (
-	"gitlab.com/postgres-ai/joe/features"
 	"gitlab.com/postgres-ai/joe/features/ce/command/builder"
 	"gitlab.com/postgres-ai/joe/features/ce/options"
 )
 
 // nolint:gochecknoinits
 func init() {
-	features.SetBuilder(builder.NewBuilder)
-	features.SetFlagProvider(&options.Extra{})
+	commandBuilder = builder.NewBuilder
+	flagProvider = &options.Extra{}
 }

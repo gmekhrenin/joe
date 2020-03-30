@@ -11,7 +11,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
@@ -25,7 +25,7 @@ type ActivityCmd struct {
 	messenger  connection.Messenger
 }
 
-var _ features.Executor = (*ActivityCmd)(nil)
+var _ definition.Executor = (*ActivityCmd)(nil)
 
 // NewActivityCmd return a new exec command.
 func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ActivityCmd {

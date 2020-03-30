@@ -19,8 +19,7 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/features"
-	_ "gitlab.com/postgres-ai/joe/features/ce"
-	_ "gitlab.com/postgres-ai/joe/features/ee"
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 )
@@ -48,7 +47,7 @@ var opts struct {
 }
 
 // TODO (akartasov): Set the app version during build.
-const Version = "v0.6.1-rc1"
+const Version = "v0.7.0"
 
 // TODO(anatoly): Refactor configs and envs.
 
@@ -116,7 +115,7 @@ func main() {
 	}
 }
 
-func parseArgs(ent features.FlagProvider) ([]string, error) {
+func parseArgs(ent definition.FlagProvider) ([]string, error) {
 	var optParser = flags.NewParser(&opts, flags.Default & ^flags.HelpFlag)
 
 	entGroup, err := optParser.AddGroup("Enterprise Options",

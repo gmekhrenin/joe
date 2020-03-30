@@ -10,7 +10,7 @@ package builder
 import (
 	"database/sql"
 
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/features/ee/command"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
@@ -28,12 +28,12 @@ type EnterpriseBuilder struct {
 }
 
 var (
-	_ features.CmdBuilder              = (*EnterpriseBuilder)(nil)
-	_ features.EnterpriseHelpMessenger = (*EnterpriseBuilder)(nil)
+	_ definition.CmdBuilder              = (*EnterpriseBuilder)(nil)
+	_ definition.EnterpriseHelpMessenger = (*EnterpriseBuilder)(nil)
 )
 
 // NewBuilder creates a new enterprise command builder.
-func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) features.CmdBuilder {
+func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) definition.CmdBuilder {
 	return &EnterpriseBuilder{
 		apiCommand: apiCmd,
 		message:    msg,
@@ -43,12 +43,12 @@ func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc 
 }
 
 // BuildActivityCmd builds a new activity command.
-func (b *EnterpriseBuilder) BuildActivityCmd() features.Executor {
+func (b *EnterpriseBuilder) BuildActivityCmd() definition.Executor {
 	return command.NewActivityCmd(b.apiCommand, b.message, b.db, b.messenger)
 }
 
 // BuildTerminateCmd builds a new activity command.
-func (b *EnterpriseBuilder) BuildTerminateCmd() features.Executor {
+func (b *EnterpriseBuilder) BuildTerminateCmd() definition.Executor {
 	return command.NewTerminateCmd(b.apiCommand, b.message, b.db, b.messenger)
 }
 

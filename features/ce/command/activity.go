@@ -8,14 +8,14 @@ package command
 import (
 	"errors"
 
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 )
 
 // ActivityCmd defines the activity command.
 type ActivityCmd struct {
 }
 
-var _ features.Executor = (*ActivityCmd)(nil)
+var _ definition.Executor = (*ActivityCmd)(nil)
 
 // Execute runs the activity command.
 func (c *ActivityCmd) Execute() error {

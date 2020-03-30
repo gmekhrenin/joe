@@ -8,7 +8,7 @@
 package options
 
 import (
-	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 )
 
 // Default values (changing these options you confirm that you have active
@@ -26,11 +26,11 @@ type Extra struct {
 	AuditEnabled  bool `long:"audit-enabled" description:"Enterprise option. Not supported in CE version"`
 }
 
-var _ features.FlagProvider = (*Extra)(nil)
+var _ definition.FlagProvider = (*Extra)(nil)
 
 // ToOpts returns the EnterpriseOptions struct.
-func (e *Extra) ToOpts() features.EnterpriseOptions {
-	return features.EnterpriseOptions{
+func (e *Extra) ToOpts() definition.EnterpriseOptions {
+	return definition.EnterpriseOptions{
 		QuotaLimit:    defaultQuotaLimit,
 		QuotaInterval: defaultQuotaInterval,
 		AuditEnabled:  defaultAudit,

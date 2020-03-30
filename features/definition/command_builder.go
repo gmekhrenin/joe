@@ -2,8 +2,8 @@
 2019 © Postgres.ai
 */
 
-// Package features provides Enterprise features and their mocks.
-package features
+// Package definition provides basic Enterprise feature definitions.
+package definition
 
 // CmdBuilder provides a builder for Enterprise commands.
 type CmdBuilder interface {
