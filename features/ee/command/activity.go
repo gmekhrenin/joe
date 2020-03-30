@@ -39,6 +39,6 @@ func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, mes
 
 // Execute runs the activity command.
 func (c *ActivityCmd) Execute() error {
-	fmt.Println("EE")
+	fmt.Println("EE not implemented yet")
 	return nil
 }
