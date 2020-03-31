@@ -62,6 +62,7 @@ func (c *TerminateCmd) Execute() error {
 	tableString.WriteString(TerminateCaption)
 
 	querier.RenderTable(tableString, terminate)
+	c.message.AppendText(tableString.String())
 
 	if err := c.messenger.UpdateText(c.message); err != nil {
 		return errors.Wrap(err, "failed to publish message")

@@ -9,6 +9,7 @@ package command
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -45,10 +46,16 @@ func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, mes
 
 // Execute runs the activity command.
 func (c *ActivityCmd) Execute() error {
-	query := `select pid, (case when (query != '' and length(query) > 30) then left(query, 30) || '...' else query end) as query, 
-	application_name, state, wait_event, NOW()-query_start as duration 
+	const truncateLength = 50
+
+	query := fmt.Sprintf(`select pid, 
+	(case when (query != '' and length(query) > %[1]) then left(query, %[1]) || '...' else query end) as query, 
+	coalesce(state,'') as state, 
+	wait_event, 
+	backend_type 
+	(case when query_start is not null then NOW()-query_start::text else NOW()-backend_start end) as duration,
 	from pg_stat_activity 
-	where pid <> pg_backend_pid();`
+	where pid <> pg_backend_pid();`, truncateLength)
 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
@@ -59,6 +66,7 @@ func (c *ActivityCmd) Execute() error {
 	}
 
 	querier.RenderTable(tableString, activity)
+	c.message.AppendText(tableString.String())
 
 	if err := c.messenger.UpdateText(c.message); err != nil {
 		return errors.Wrap(err, "failed to publish message")

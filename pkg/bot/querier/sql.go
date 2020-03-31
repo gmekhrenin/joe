@@ -102,7 +102,10 @@ func runTableQuery(db *sql.DB, query string, args ...interface{}) ([][]string, e
 			log.Err("DB query traversal:", err)
 			return nil, err
 		}
-		resultTable = append(resultTable, row)
+
+		resultRow := make([]string, len(columns))
+		copy(resultRow, row)
+		resultTable = append(resultTable, resultRow)
 	}
 
 	if err := rows.Err(); err != nil {
