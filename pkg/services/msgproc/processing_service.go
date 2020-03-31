@@ -63,6 +63,8 @@ var supportedCommands = []string{
 	CommandHypo,
 	CommandExec,
 	CommandReset,
+	CommandActivity,
+	CommandTerminate,
 	CommandHelp,
 
 	CommandPsqlD,
@@ -299,54 +301,50 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		SlackTs:     incomingMessage.Timestamp,
 	}
 
-	const maxRetryCounter = 1
+	switch {
+	case receivedCommand == CommandExplain:
+		err = command.Explain(s.messenger, apiCmd, msg, s.config.Explain, user.Session.CloneConnection)
 
-	// TODO(akartasov): Refactor commands and create retrier.
-	for iteration := 0; iteration <= maxRetryCounter; iteration++ {
-		switch {
-		case receivedCommand == CommandExplain:
-			err = command.Explain(s.messenger, apiCmd, msg, s.config.Explain, user.Session.CloneConnection)
+	case receivedCommand == CommandPlan:
+		planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		err = planCmd.Execute()
 
-		case receivedCommand == CommandPlan:
-			planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
-			err = planCmd.Execute()
+	case receivedCommand == CommandExec:
+		execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		err = execCmd.Execute()
 
-		case receivedCommand == CommandExec:
-			execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
-			err = execCmd.Execute()
+	case receivedCommand == CommandReset:
+		err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
 
-		case receivedCommand == CommandReset:
-			err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
+	case receivedCommand == CommandHypo:
+		hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		err = hypoCmd.Execute()
 
-		case receivedCommand == CommandHypo:
-			hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
-			err = hypoCmd.Execute()
+	case receivedCommand == CommandActivity:
+		activityCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
+		err = activityCmd.Execute()
 
-		case receivedCommand == CommandActivity:
-			activityCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
-			err = activityCmd.Execute()
+	case receivedCommand == CommandTerminate:
+		terminateCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
+		err = terminateCmd.Execute()
 
-		case receivedCommand == CommandTerminate:
-			terminateCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
-			err = terminateCmd.Execute()
+	case util.Contains(allowedPsqlCommands, receivedCommand):
+		runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
+		err = command.Transmit(apiCmd, msg, s.messenger, runner)
+	}
 
-		case util.Contains(allowedPsqlCommands, receivedCommand):
-			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
-			err = command.Transmit(apiCmd, msg, s.messenger, runner)
+	if err != nil {
+		if _, ok := err.(*net.OpError); !ok {
+			if err := s.messenger.Fail(msg, err.Error()); err != nil {
+				log.Err(err)
+			}
+
+			apiCmd.Fail(err.Error())
+
+			return
 		}
 
-		if err != nil {
-			if _, ok := err.(*net.OpError); !ok || iteration == maxRetryCounter {
-				s.messenger.Fail(msg, err.Error())
-				apiCmd.Fail(err.Error())
-
-				return
-			}
-
-			if s.isActiveSession(context.TODO(), user.Session.Clone.ID) {
-				continue
-			}
-
+		if !s.isActiveSession(context.TODO(), user.Session.Clone.ID) {
 			msg.AppendText("Session was closed by Database Lab.\n")
 			if err := s.messenger.UpdateText(msg); err != nil {
 				log.Err(fmt.Sprintf("failed to append message on session close: %+v", err))
@@ -358,8 +356,6 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 				return
 			}
 		}
-
-		break
 	}
 
 	if s.config.Platform.HistoryEnabled {
