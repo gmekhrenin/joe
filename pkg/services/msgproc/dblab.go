@@ -50,7 +50,7 @@ const MsgSessionForewordTpl = "• Say 'help' to see the full list of commands.\
 	"• The actual timing values may differ from production because actual caches in DB Lab are smaller. " +
 	"However, the number of bytes and pages/buffers in plans are identical to production.\n" +
 	"\nMade with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe \n" +
-	"\nJoe version: %s.\nSnapshot data state at: %s."
+	"\nJoe version: %s (%s).\nSnapshot data state at: %s."
 
 // SeparatorEllipsis provides a separator for cut messages.
 const SeparatorEllipsis = "\n[...SKIP...]\n"
@@ -104,7 +104,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	}
 
 	sMsg.AppendText(getForeword(time.Duration(clone.Metadata.MaxIdleMinutes)*time.Minute,
-		s.config.App.Version, clone.Snapshot.DataStateAt))
+		s.config.App.Version, s.featurePack.Entertainer().GetEdition(), clone.Snapshot.DataStateAt))
 
 	if err := s.messenger.UpdateText(sMsg); err != nil {
 		s.messenger.Fail(sMsg, err.Error())
@@ -268,7 +268,7 @@ func (s *ProcessingService) APICreatePlatformSession(uid string, username string
 	return fmt.Sprintf("%d", respData.SessionId), nil
 }
 
-func getForeword(idleDuration time.Duration, version, dataStateAt string) string {
+func getForeword(idleDuration time.Duration, version, edition, dataStateAt string) string {
 	duration := durafmt.Parse(idleDuration.Round(time.Minute))
-	return fmt.Sprintf(MsgSessionForewordTpl, duration, version, dataStateAt)
+	return fmt.Sprintf(MsgSessionForewordTpl, duration, version, edition, dataStateAt)
 }

@@ -7,6 +7,10 @@
 // Package entertainer provides Enterprise entertainer service.
 package entertainer
 
+import (
+	"gitlab.com/postgres-ai/joe/features/definition"
+)
+
 // Constants provide features description.
 const (
 	edition               = "Enterprise Edition"
@@ -18,7 +22,7 @@ const (
 type Entertainer struct {
 }
 
-var _ definition.EnterpriseHelpMessenger = (*Entertainer)(nil)
+var _ definition.Entertainer = (*Entertainer)(nil)
 
 // New creates a new Entertainer for the Enterprise edition.
 func New() *Entertainer {

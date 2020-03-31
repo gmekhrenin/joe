@@ -12,7 +12,7 @@ import (
 // Constants provide features description.
 const (
 	edition               = "Community Edition"
-	enterpriseHelpMessage = "Enterprise commands:\n" +
+	enterpriseHelpMessage = "\n*Enterprise commands*:\n" +
 		"• `activity` — show information related to the current activity of that process. Not supported in CE version\n" +
 		"• `terminate` — terminate a backend. Not supported in CE version\n"
 )

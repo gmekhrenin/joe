@@ -426,7 +426,7 @@ func (s *ProcessingService) appendHelp(text string) string {
 	sb.WriteString(text)
 	sb.WriteString(HelpMessage)
 	sb.WriteString(entertainerSvc.GetEnterpriseHelpMessage())
-	sb.WriteString(fmt.Sprintf("Version: %s. (%s)\n", s.config.App.Version, entertainerSvc.GetEdition()))
+	sb.WriteString(fmt.Sprintf("Version: %s (%s)\n", s.config.App.Version, entertainerSvc.GetEdition()))
 
 	return sb.String()
 }

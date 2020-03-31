@@ -8,7 +8,7 @@
 package features
 
 import (
-	"gitlab.com/postgres-ai/joe/features/edition/ce/entertainer"
+	"gitlab.com/postgres-ai/joe/features/edition/ee/entertainer"
 	"gitlab.com/postgres-ai/joe/features/edition/ee/command/builder"
 	"gitlab.com/postgres-ai/joe/features/edition/ee/options"
 )
