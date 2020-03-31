@@ -55,7 +55,7 @@ func (c *ActivityCmd) Execute() error {
 	backend_type, 
 	(case when query_start is not null then (NOW()-query_start)::text else '' end) as duration
 	from pg_stat_activity 
-	where pid <> pg_backend_pid();`, truncateLength)
+	where state IN('active', 'idle in transaction') AND pid <> pg_backend_pid();`, truncateLength)
 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
