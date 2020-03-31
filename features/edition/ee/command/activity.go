@@ -8,10 +8,10 @@
 package command
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
@@ -28,18 +28,18 @@ const ActivityCaption = "*Activity response:*\n"
 type ActivityCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	conn       *pgx.Conn
 	messenger  connection.Messenger
 }
 
 var _ definition.Executor = (*ActivityCmd)(nil)
 
 // NewActivityCmd return a new exec command.
-func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ActivityCmd {
+func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, conn *pgx.Conn, messengerSvc connection.Messenger) *ActivityCmd {
 	return &ActivityCmd{
 		apiCommand: apiCmd,
 		message:    msg,
-		db:         db,
+		conn:       conn,
 		messenger:  messengerSvc,
 	}
 }
@@ -64,7 +64,7 @@ where state in ('active', 'idle in transaction') and pid <> pg_backend_pid();`, 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
 
-	activity, err := querier.DBQuery(c.db, query)
+	activity, err := querier.DBQuery(c.conn, query)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}

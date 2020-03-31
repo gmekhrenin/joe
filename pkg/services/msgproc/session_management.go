@@ -94,7 +94,9 @@ func (s *ProcessingService) stopSession(user *usermanager.User) {
 	user.Session.PlatformSessionID = ""
 
 	if user.Session.CloneConnection != nil {
-		user.Session.CloneConnection.Close()
+		if err := user.Session.CloneConnection.Close(context.TODO()); err != nil {
+			log.Err("failed to close connection", err)
+		}
 	}
 }
 

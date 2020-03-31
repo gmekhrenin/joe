@@ -6,10 +6,10 @@
 package usermanager
 
 import (
-	"database/sql"
 	"time"
 
 	"github.com/dustin/go-humanize/english"
+	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 
 	dblabmodels "gitlab.com/postgres-ai/database-lab/pkg/models"
@@ -36,7 +36,7 @@ type UserSession struct {
 
 	Clone           *dblabmodels.Clone
 	ConnParams      models.Clone
-	CloneConnection *sql.DB
+	CloneConnection *pgx.Conn
 }
 
 // Quota defines a user quota for requests.

@@ -5,10 +5,10 @@
 package command
 
 import (
-	"database/sql"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
@@ -26,12 +26,12 @@ const MsgExecOptionReq = "Use `exec` to run query, e.g. `exec drop index some_in
 type ExecCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgx.Conn
 	messenger  connection.Messenger
 }
 
 // NewExec return a new exec command.
-func NewExec(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ExecCmd {
+func NewExec(apiCmd *api.ApiCommand, msg *models.Message, db *pgx.Conn, messengerSvc connection.Messenger) *ExecCmd {
 	return &ExecCmd{
 		apiCommand: apiCmd,
 		message:    msg,

@@ -6,9 +6,10 @@ package querier
 
 import (
 	"bytes"
-	"database/sql"
+	"context"
 	"strings"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/lib/pq"
 	"github.com/olekukonko/tablewriter"
 	"github.com/pkg/errors"
@@ -24,28 +25,28 @@ const (
 )
 
 // DBExec executes query without returning results.
-func DBExec(db *sql.DB, query string) error {
-	_, err := runQuery(db, query, true)
+func DBExec(db *pgx.Conn, query string) error {
+	_, err := runQuery(context.TODO(), db, query, true)
 	return err
 }
 
 // DBQuery runs query and returns table results.
-func DBQuery(db *sql.DB, query string, args ...interface{}) ([][]string, error) {
-	return runTableQuery(db, query, args...)
+func DBQuery(db *pgx.Conn, query string, args ...interface{}) ([][]string, error) {
+	return runTableQuery(context.TODO(), db, query, args...)
 }
 
 // DBQueryWithResponse runs query with returning results.
-func DBQueryWithResponse(db *sql.DB, query string) (string, error) {
-	return runQuery(db, query, false)
+func DBQueryWithResponse(db *pgx.Conn, query string) (string, error) {
+	return runQuery(context.TODO(), db, query, false)
 }
 
-func runQuery(db *sql.DB, query string, omitResp bool, args ...interface{}) (string, error) {
+func runQuery(ctx context.Context, db *pgx.Conn, query string, omitResp bool, args ...interface{}) (string, error) {
 	log.Dbg("DB query:", query)
 
 	// TODO(anatoly): Retry mechanic.
 	var result = ""
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		log.Err("DB query:", err)
 		return "", clarifyQueryError([]byte(query), err)
@@ -71,24 +72,27 @@ func runQuery(db *sql.DB, query string, omitResp bool, args ...interface{}) (str
 }
 
 // runTableQuery runs query and returns results in the table view.
-func runTableQuery(db *sql.DB, query string, args ...interface{}) ([][]string, error) {
+func runTableQuery(ctx context.Context, db *pgx.Conn, query string, args ...interface{}) ([][]string, error) {
 	log.Dbg("DB table query:", query)
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
 		log.Err("DB query:", err)
 		return nil, clarifyQueryError([]byte(query), err)
 	}
 	defer rows.Close()
 
-	columns, err := rows.Columns()
-	if err != nil {
-		log.Err("Failed to get columns:", err)
-		return nil, errors.Wrap(err, "failed to read column names")
-	}
+	columns := rows.FieldDescriptions()
 
 	// Prepare a result table.
-	resultTable := [][]string{columns}
+	resultTable := make([][]string, 0)
+
+	head := make([]string, len(columns))
+	for _, c := range columns {
+		head = append(head, string(c.Name))
+	}
+
+	resultTable = append(resultTable, head)
 
 	row := make([]string, len(columns))
 	scanInterfaces := make([]interface{}, len(columns))

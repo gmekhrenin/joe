@@ -5,9 +5,9 @@
 package command
 
 import (
-	"database/sql"
 	"strings"
 
+	"github.com/jackc/pgx/v4"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 
@@ -37,12 +37,12 @@ For a quick start, you can use prepared images: https://hub.docker.com/repositor
 type HypoCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgx.Conn
 	messenger  connection.Messenger
 }
 
 // NewHypo creates a new Hypo command.
-func NewHypo(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) *HypoCmd {
+func NewHypo(apiCmd *api.ApiCommand, msg *models.Message, db *pgx.Conn, msgSvc connection.Messenger) *HypoCmd {
 	return &HypoCmd{
 		apiCommand: apiCmd,
 		message:    msg,

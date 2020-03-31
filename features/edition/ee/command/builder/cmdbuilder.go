@@ -8,7 +8,7 @@
 package builder
 
 import (
-	"database/sql"
+	"github.com/jackc/pgx/v4"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/features/edition/ee/command"
@@ -21,28 +21,28 @@ import (
 type EnterpriseBuilder struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	conn       *pgx.Conn
 	messenger  connection.Messenger
 }
 
 var _ definition.CmdBuilder = (*EnterpriseBuilder)(nil)
 
 // NewBuilder creates a new enterprise command builder.
-func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) definition.CmdBuilder {
+func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, conn *pgx.Conn, msgSvc connection.Messenger) definition.CmdBuilder {
 	return &EnterpriseBuilder{
 		apiCommand: apiCmd,
 		message:    msg,
-		db:         db,
+		conn:       conn,
 		messenger:  msgSvc,
 	}
 }
 
 // BuildActivityCmd builds a new activity command.
 func (b *EnterpriseBuilder) BuildActivityCmd() definition.Executor {
-	return command.NewActivityCmd(b.apiCommand, b.message, b.db, b.messenger)
+	return command.NewActivityCmd(b.apiCommand, b.message, b.conn, b.messenger)
 }
 
 // BuildTerminateCmd builds a new activity command.
 func (b *EnterpriseBuilder) BuildTerminateCmd() definition.Executor {
-	return command.NewTerminateCmd(b.apiCommand, b.message, b.db, b.messenger)
+	return command.NewTerminateCmd(b.apiCommand, b.message, b.conn, b.messenger)
 }
