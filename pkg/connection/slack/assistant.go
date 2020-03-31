@@ -37,7 +37,7 @@ type Assistant struct {
 	msgProcessors  map[string]connection.MessageProcessor
 	prefix         string
 	appCfg         *config.Config
-	commandBuilder features.CommandFactoryMethod
+	featurePack    *features.Pack
 }
 
 // SlackConfig defines a slack configuration parameters.
@@ -47,7 +47,7 @@ type SlackConfig struct {
 }
 
 // NewAssistant returns a new assistant service.
-func NewAssistant(cfg *config.Credentials, appCfg *config.Config, cmdBuilder features.CommandFactoryMethod) (*Assistant, error) {
+func NewAssistant(cfg *config.Credentials, appCfg *config.Config, pack *features.Pack) (*Assistant, error) {
 	if err := validateCredentials(cfg); err != nil {
 		return nil, errors.Wrap(err, "invalid credentials given")
 	}
@@ -56,7 +56,7 @@ func NewAssistant(cfg *config.Credentials, appCfg *config.Config, cmdBuilder fea
 		credentialsCfg: cfg,
 		appCfg:         appCfg,
 		msgProcessors:  make(map[string]connection.MessageProcessor),
-		commandBuilder: cmdBuilder,
+		featurePack:    pack,
 	}
 
 	return assistant, nil
@@ -126,7 +126,7 @@ func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *
 	}
 
 	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager,
-		processingCfg, a.commandBuilder)
+		processingCfg, a.featurePack)
 }
 
 // getProcessingService returns processing service by channelID.

@@ -20,7 +20,6 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
 
 	"gitlab.com/postgres-ai/joe/features"
-	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/config"
@@ -97,7 +96,7 @@ var allowedPsqlCommands = []string{
 }
 
 type ProcessingService struct {
-	commandBuilder   features.CommandFactoryMethod
+	featurePack      *features.Pack
 	messageValidator connection.MessageValidator
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
@@ -122,9 +121,9 @@ var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, cfg ProcessingConfig, cmdBuilder features.CommandFactoryMethod) *ProcessingService {
+	userSvc *usermanager.UserManager, cfg ProcessingConfig, featurePack *features.Pack) *ProcessingService {
 	return &ProcessingService{
-		commandBuilder:   cmdBuilder,
+		featurePack:      featurePack,
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
@@ -250,10 +249,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if receivedCommand == CommandHelp {
 		msg := models.NewMessage(incomingMessage.ChannelID)
 
-		// TODO (akartasov): make a separate interface.
-		helper := s.commandBuilder(nil, nil, nil, nil)
-
-		msgText = s.appendHelp(helper, msgText)
+		msgText = s.appendHelp(msgText)
 		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
@@ -321,11 +317,13 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		err = hypoCmd.Execute()
 
 	case receivedCommand == CommandActivity:
-		activityCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
+		cmdBuilder := s.featurePack.CmdBuilder()
+		activityCmd := cmdBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
 		err = activityCmd.Execute()
 
 	case receivedCommand == CommandTerminate:
-		terminateCmd := s.commandBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
+		cmdBuilder := s.featurePack.CmdBuilder()
+		terminateCmd := cmdBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
 		err = terminateCmd.Execute()
 
 	case util.Contains(allowedPsqlCommands, receivedCommand):
@@ -361,7 +359,10 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if s.config.Platform.HistoryEnabled {
 		if _, err := apiCmd.Post(); err != nil {
 			log.Err(err)
-			s.messenger.Fail(msg, err.Error())
+
+			if err := s.messenger.Fail(msg, err.Error()); err != nil {
+				log.Err(err)
+			}
 
 			return
 		}
@@ -418,16 +419,14 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 }
 
-func (s *ProcessingService) appendHelp(helper definition.EnterpriseHelpMessenger, text string) string {
+func (s *ProcessingService) appendHelp(text string) string {
 	sb := strings.Builder{}
+	entertainerSvc := s.featurePack.Entertainer()
 
 	sb.WriteString(text)
 	sb.WriteString(HelpMessage)
-	sb.WriteString(helper.GetEnterpriseHelpMessage())
-
-	sb.WriteString("Version: ")
-	sb.WriteString(s.config.App.Version)
-	sb.WriteString("\n")
+	sb.WriteString(entertainerSvc.GetEnterpriseHelpMessage())
+	sb.WriteString(fmt.Sprintf("Version: %s. (%s)\n", s.config.App.Version, entertainerSvc.GetEdition()))
 
 	return sb.String()
 }
