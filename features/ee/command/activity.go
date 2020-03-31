@@ -49,11 +49,11 @@ func (c *ActivityCmd) Execute() error {
 	const truncateLength = 50
 
 	query := fmt.Sprintf(`select pid, 
-	(case when (query != '' and length(query) > %[1]) then left(query, %[1]) || '...' else query end) as query, 
+	(case when (query != '' and length(query) > %[1]d) then left(query, %[1]d) || '...' else query end) as query, 
 	coalesce(state,'') as state, 
 	wait_event, 
-	backend_type 
-	(case when query_start is not null then NOW()-query_start::text else NOW()-backend_start end) as duration,
+	backend_type, 
+	(case when query_start is not null then (NOW()-query_start)::text else '' end) as duration
 	from pg_stat_activity 
 	where pid <> pg_backend_pid();`, truncateLength)
 
