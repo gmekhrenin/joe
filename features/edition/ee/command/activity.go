@@ -52,12 +52,12 @@ func (c *ActivityCmd) Execute() error {
   pid::text,
   (case when (query <> '' and length(query) > %[1]d) then left(query, %[1]d) || '...' else query end) as query,
   coalesce(state, '') as state,
-  coalesce(wait_event, ''),
-  coalesce(wait_event_type, ''),
+  coalesce(wait_event, '') as wait_event,
+  coalesce(wait_event_type, '') as wait_event_type,
   backend_type,
-  coalesce(now() - xact_start)::text, '') as xact_duration,
-  coalesce(now() - query_start)::text, '') as query_duration,
-  coalesce(now() - state_change)::text, '') as state_changed_ago
+  coalesce((now() - xact_start)::text, '') as xact_duration,
+  coalesce((now() - query_start)::text, '') as query_duration,
+  coalesce((now() - state_change)::text, '') as state_changed_ago
 from pg_stat_activity 
 where state in ('active', 'idle in transaction') and pid <> pg_backend_pid();`, truncateLength)
 

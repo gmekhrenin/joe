@@ -51,7 +51,7 @@ func (c *TerminateCmd) Execute() error {
 		return errors.Wrap(err, "invalid pid given")
 	}
 
-	query := "select pg_terminate_backend($1)"
+	query := "select pg_terminate_backend($1)::text"
 
 	terminate, err := querier.DBQuery(c.db, query, pid)
 	if err != nil {
