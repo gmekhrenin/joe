@@ -9,8 +9,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/lib/pq"
 	"github.com/olekukonko/tablewriter"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
@@ -139,7 +139,7 @@ func clarifyQueryError(query []byte, err error) error {
 	}
 
 	switch queryErr := err.(type) {
-	case *pq.Error:
+	case *pgconn.PgError:
 		switch queryErr.Code {
 		case SyntaxPQErrorCode:
 			// Check &nbsp; - ASCII code 160

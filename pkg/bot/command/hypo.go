@@ -7,8 +7,8 @@ package command
 import (
 	"strings"
 
+	"github.com/jackc/pgconn"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/lib/pq"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
@@ -56,7 +56,7 @@ func (h *HypoCmd) Execute() error {
 	hypoSub, commandTail := h.parseQuery()
 
 	if err := h.initExtension(); err != nil {
-		if pqError, ok := err.(*pq.Error); ok && pqError.Code == querier.SystemPQErrorCodeUndefinedFile {
+		if pgError, ok := err.(*pgconn.PgError); ok && pgError.Code == querier.SystemPQErrorCodeUndefinedFile {
 			h.message.AppendText(hypoPGExceptionMessage)
 
 			if err := h.messenger.UpdateText(h.message); err != nil {
@@ -127,7 +127,7 @@ func (h *HypoCmd) describe(indexID string) error {
 	queryArgs := []interface{}{}
 
 	if indexID != "" {
-		query = `select indexrelid, indexname, hypopg_get_indexdef(indexrelid), 
+		query = `select indexrelid::text, indexname, hypopg_get_indexdef(indexrelid), 
 			pg_size_pretty(hypopg_relation_size(indexrelid)) 
 			from hypopg_list_indexes() where indexrelid = $1`
 		queryArgs = append(queryArgs, indexID)
