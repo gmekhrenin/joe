@@ -5,15 +5,15 @@
 package command
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
@@ -26,12 +26,12 @@ const MsgExecOptionReq = "Use `exec` to run query, e.g. `exec drop index some_in
 type ExecCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 // NewExec return a new exec command.
-func NewExec(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ExecCmd {
+func NewExec(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *ExecCmd {
 	return &ExecCmd{
 		apiCommand: apiCmd,
 		message:    msg,
@@ -47,7 +47,7 @@ func (cmd ExecCmd) Execute() error {
 	}
 
 	start := time.Now()
-	err := querier.DBExec(cmd.db, cmd.apiCommand.Query)
+	_, err := cmd.db.Exec(context.TODO(), cmd.apiCommand.Query)
 	elapsed := time.Since(start)
 	if err != nil {
 		log.Err("Exec:", err)

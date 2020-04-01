@@ -6,7 +6,7 @@
 package builder
 
 import (
-	"database/sql"
+	"github.com/jackc/pgx/v4/pgxpool"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/features/edition/ce/command"
@@ -22,7 +22,7 @@ type CommunityBuilder struct {
 var _ definition.CmdBuilder = (*CommunityBuilder)(nil)
 
 // NewBuilder creates a new activity builder.
-func NewBuilder(_ *api.ApiCommand, _ *models.Message, _ *sql.DB, _ connection.Messenger) definition.CmdBuilder {
+func NewBuilder(_ *api.ApiCommand, _ *models.Message, _ *pgxpool.Pool, _ connection.Messenger) definition.CmdBuilder {
 	return &CommunityBuilder{}
 }
 

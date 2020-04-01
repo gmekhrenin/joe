@@ -8,10 +8,11 @@
 package command
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
@@ -28,14 +29,14 @@ const ActivityCaption = "*Activity response:*\n"
 type ActivityCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 var _ definition.Executor = (*ActivityCmd)(nil)
 
 // NewActivityCmd return a new exec command.
-func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *ActivityCmd {
+func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *ActivityCmd {
 	return &ActivityCmd{
 		apiCommand: apiCmd,
 		message:    msg,
@@ -49,22 +50,22 @@ func (c *ActivityCmd) Execute() error {
 	const truncateLength = 50
 
 	query := fmt.Sprintf(`select
-  pid,
+  pid::text,
   (case when (query <> '' and length(query) > %[1]d) then left(query, %[1]d) || '...' else query end) as query,
   coalesce(state, '') as state,
-  wait_event,
-  wait_event_type,
+  coalesce(wait_event, '') as wait_event,
+  coalesce(wait_event_type, '') as wait_event_type,
   backend_type,
-  coalesce(now() - xact_start)::text, '') as xact_duration,
-  coalesce(now() - query_start)::text, '') as query_duration,
-  coalesce(now() - state_change)::text, '') as state_changed_ago
+  coalesce((now() - xact_start)::text, '') as xact_duration,
+  coalesce((now() - query_start)::text, '') as query_duration,
+  coalesce((now() - state_change)::text, '') as state_changed_ago
 from pg_stat_activity 
 where state in ('active', 'idle in transaction') and pid <> pg_backend_pid();`, truncateLength)
 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
 
-	activity, err := querier.DBQuery(c.db, query)
+	activity, err := querier.DBQuery(context.TODO(), c.db, query)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}
