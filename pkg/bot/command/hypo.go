@@ -109,8 +109,8 @@ func (h *HypoCmd) initExtension(ctx context.Context) error {
 	return err
 }
 
-func (h *HypoCmd) create(_ context.Context) error {
-	res, err := querier.DBQuery(h.db, "select * from hypopg_create_index($1)", h.apiCommand.Query)
+func (h *HypoCmd) create(ctx context.Context) error {
+	res, err := querier.DBQuery(ctx, h.db, "select indexrelid::text, indexname from hypopg_create_index($1)", h.apiCommand.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")
 	}
@@ -127,8 +127,8 @@ func (h *HypoCmd) create(_ context.Context) error {
 	return nil
 }
 
-func (h *HypoCmd) describe(_ context.Context, indexID string) error {
-	query := "select * from hypopg_list_indexes()"
+func (h *HypoCmd) describe(ctx context.Context, indexID string) error {
+	query := "select indexrelid::text, indexname, nspname, relname, amname from hypopg_list_indexes()"
 	queryArgs := []interface{}{}
 
 	if indexID != "" {
@@ -138,7 +138,7 @@ func (h *HypoCmd) describe(_ context.Context, indexID string) error {
 		queryArgs = append(queryArgs, indexID)
 	}
 
-	res, err := querier.DBQuery(h.db, query, queryArgs...)
+	res, err := querier.DBQuery(ctx, h.db, query, queryArgs...)
 	if err != nil {
 		return errors.Wrap(err, "failed to run description query")
 	}
@@ -155,12 +155,12 @@ func (h *HypoCmd) describe(_ context.Context, indexID string) error {
 	return nil
 }
 
-func (h *HypoCmd) drop(_ context.Context, indexID string) error {
+func (h *HypoCmd) drop(ctx context.Context, indexID string) error {
 	if indexID == "" {
 		return errors.Errorf("failed to drop a hypothetical index: indexrelid required")
 	}
 
-	_, err := querier.DBQuery(h.db, "select * from hypopg_drop_index($1)", indexID)
+	_, err := querier.DBQuery(ctx, h.db, "select * from hypopg_drop_index($1)", indexID)
 	if err != nil {
 		return errors.Wrap(err, "failed to drop index")
 	}

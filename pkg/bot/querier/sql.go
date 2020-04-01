@@ -25,8 +25,8 @@ const (
 )
 
 // DBQuery runs query and returns table results.
-func DBQuery(db *pgxpool.Pool, query string, args ...interface{}) ([][]string, error) {
-	return runTableQuery(context.TODO(), db, query, args...)
+func DBQuery(ctx context.Context, db *pgxpool.Pool, query string, args ...interface{}) ([][]string, error) {
+	return runTableQuery(ctx, db, query, args...)
 }
 
 // DBQueryWithResponse runs query with returning results.

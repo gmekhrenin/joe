@@ -8,6 +8,7 @@
 package command
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -53,7 +54,7 @@ func (c *TerminateCmd) Execute() error {
 
 	query := "select pg_terminate_backend($1)::text"
 
-	terminate, err := querier.DBQuery(c.db, query, pid)
+	terminate, err := querier.DBQuery(context.TODO(), c.db, query, pid)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}

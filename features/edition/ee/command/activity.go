@@ -8,6 +8,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -64,7 +65,7 @@ where state in ('active', 'idle in transaction') and pid <> pg_backend_pid();`, 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
 
-	activity, err := querier.DBQuery(c.db, query)
+	activity, err := querier.DBQuery(context.TODO(), c.db, query)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}
