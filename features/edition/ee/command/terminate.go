@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
@@ -28,18 +28,18 @@ const TerminateCaption = "*Terminate response:*\n"
 type TerminateCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	conn       *pgx.Conn
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 var _ definition.Executor = (*TerminateCmd)(nil)
 
 // NewTerminateCmd return a new terminate command.
-func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, conn *pgx.Conn, messengerSvc connection.Messenger) *TerminateCmd {
+func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *TerminateCmd {
 	return &TerminateCmd{
 		apiCommand: apiCmd,
 		message:    msg,
-		conn:       conn,
+		db:         db,
 		messenger:  messengerSvc,
 	}
 }
@@ -53,7 +53,7 @@ func (c *TerminateCmd) Execute() error {
 
 	query := "select pg_terminate_backend($1)"
 
-	terminate, err := querier.DBQuery(c.conn, query, pid)
+	terminate, err := querier.DBQuery(c.db, query, pid)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}

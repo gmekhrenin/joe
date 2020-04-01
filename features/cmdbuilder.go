@@ -6,7 +6,7 @@
 package features
 
 import (
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
@@ -15,7 +15,7 @@ import (
 )
 
 // CommandFactoryMethod defines a factory method to create Enterprise commands.
-type CommandFactoryMethod func(*api.ApiCommand, *models.Message, *pgx.Conn, connection.Messenger) definition.CmdBuilder
+type CommandFactoryMethod func(*api.ApiCommand, *models.Message, *pgxpool.Pool, connection.Messenger) definition.CmdBuilder
 
 var commandBuilder CommandFactoryMethod
 

@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
@@ -27,12 +27,12 @@ const MsgPlanOptionReq = "Use `plan` to see the query's plan without execution, 
 type PlanCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *pgx.Conn
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 // NewPlan return a new plan command.
-func NewPlan(apiCmd *api.ApiCommand, msg *models.Message, db *pgx.Conn, messengerSvc connection.Messenger) *PlanCmd {
+func NewPlan(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *PlanCmd {
 	return &PlanCmd{
 		apiCommand: apiCmd,
 		message:    msg,

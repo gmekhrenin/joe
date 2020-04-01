@@ -9,7 +9,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/lib/pq"
 	"github.com/olekukonko/tablewriter"
 	"github.com/pkg/errors"
@@ -25,22 +25,22 @@ const (
 )
 
 // DBExec executes query without returning results.
-func DBExec(db *pgx.Conn, query string) error {
+func DBExec(db *pgxpool.Pool, query string) error {
 	_, err := runQuery(context.TODO(), db, query, true)
 	return err
 }
 
 // DBQuery runs query and returns table results.
-func DBQuery(db *pgx.Conn, query string, args ...interface{}) ([][]string, error) {
+func DBQuery(db *pgxpool.Pool, query string, args ...interface{}) ([][]string, error) {
 	return runTableQuery(context.TODO(), db, query, args...)
 }
 
 // DBQueryWithResponse runs query with returning results.
-func DBQueryWithResponse(db *pgx.Conn, query string) (string, error) {
+func DBQueryWithResponse(db *pgxpool.Pool, query string) (string, error) {
 	return runQuery(context.TODO(), db, query, false)
 }
 
-func runQuery(ctx context.Context, db *pgx.Conn, query string, omitResp bool, args ...interface{}) (string, error) {
+func runQuery(ctx context.Context, db *pgxpool.Pool, query string, omitResp bool, args ...interface{}) (string, error) {
 	log.Dbg("DB query:", query)
 
 	// TODO(anatoly): Retry mechanic.
@@ -72,7 +72,7 @@ func runQuery(ctx context.Context, db *pgx.Conn, query string, omitResp bool, ar
 }
 
 // runTableQuery runs query and returns results in the table view.
-func runTableQuery(ctx context.Context, db *pgx.Conn, query string, args ...interface{}) ([][]string, error) {
+func runTableQuery(ctx context.Context, db *pgxpool.Pool, query string, args ...interface{}) ([][]string, error) {
 	log.Dbg("DB table query:", query)
 
 	rows, err := db.Query(ctx, query, args...)
@@ -82,33 +82,28 @@ func runTableQuery(ctx context.Context, db *pgx.Conn, query string, args ...inte
 	}
 	defer rows.Close()
 
-	columns := rows.FieldDescriptions()
-
 	// Prepare a result table.
 	resultTable := make([][]string, 0)
-
-	head := make([]string, len(columns))
-	for _, c := range columns {
-		head = append(head, string(c.Name))
-	}
-
-	resultTable = append(resultTable, head)
-
-	row := make([]string, len(columns))
-	scanInterfaces := make([]interface{}, len(columns))
-
-	for i := range scanInterfaces {
-		scanInterfaces[i] = &row[i]
-	}
+	head := make([]string, 0)
 
 	for rows.Next() {
-		if err := rows.Scan(scanInterfaces...); err != nil {
-			log.Err("DB query traversal:", err)
-			return nil, err
+		if len(head) == 0 {
+			// We have to get the descriptions of fields after rows.Next only https://github.com/jackc/pgx/issues/459
+			fieldDescriptions := rows.FieldDescriptions()
+			for _, column := range fieldDescriptions {
+				head = append(head, string(column.Name))
+			}
+
+			resultTable = append(resultTable, head)
 		}
 
-		resultRow := make([]string, len(columns))
-		copy(resultRow, row)
+		rawValues := rows.RawValues()
+		resultRow := make([]string, 0, len(head))
+
+		for _, rawValue := range rawValues {
+			resultRow = append(resultRow, string(rawValue))
+		}
+
 		resultTable = append(resultTable, resultRow)
 	}
 
