@@ -8,10 +8,11 @@
 package command
 
 import (
-	"database/sql"
+	"context"
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
@@ -28,14 +29,14 @@ const TerminateCaption = "*Terminate response:*\n"
 type TerminateCmd struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 var _ definition.Executor = (*TerminateCmd)(nil)
 
 // NewTerminateCmd return a new terminate command.
-func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, messengerSvc connection.Messenger) *TerminateCmd {
+func NewTerminateCmd(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *TerminateCmd {
 	return &TerminateCmd{
 		apiCommand: apiCmd,
 		message:    msg,
@@ -51,9 +52,9 @@ func (c *TerminateCmd) Execute() error {
 		return errors.Wrap(err, "invalid pid given")
 	}
 
-	query := "select pg_terminate_backend($1)"
+	query := "select pg_terminate_backend($1)::text"
 
-	terminate, err := querier.DBQuery(c.db, query, pid)
+	terminate, err := querier.DBQuery(context.TODO(), c.db, query, pid)
 	if err != nil {
 		return errors.Wrap(err, "failed to make query")
 	}

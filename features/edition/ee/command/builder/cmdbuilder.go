@@ -8,7 +8,7 @@
 package builder
 
 import (
-	"database/sql"
+	"github.com/jackc/pgx/v4/pgxpool"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/features/edition/ee/command"
@@ -21,14 +21,14 @@ import (
 type EnterpriseBuilder struct {
 	apiCommand *api.ApiCommand
 	message    *models.Message
-	db         *sql.DB
+	db         *pgxpool.Pool
 	messenger  connection.Messenger
 }
 
 var _ definition.CmdBuilder = (*EnterpriseBuilder)(nil)
 
 // NewBuilder creates a new enterprise command builder.
-func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, msgSvc connection.Messenger) definition.CmdBuilder {
+func NewBuilder(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, msgSvc connection.Messenger) definition.CmdBuilder {
 	return &EnterpriseBuilder{
 		apiCommand: apiCmd,
 		message:    msg,

@@ -8,7 +8,6 @@ package msgproc
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hako/durafmt"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 	"github.com/rs/xid"
 	"github.com/sethvargo/go-password/password"
@@ -165,18 +165,14 @@ func (s *ProcessingService) buildDBLabCloneConn(dbParams *dblabmodels.Database) 
 	}
 }
 
-func initConn(dblabClone models.Clone) (*sql.DB, error) {
-	db, err := sql.Open("postgres", dblabClone.ConnectionString())
+func initConn(dblabClone models.Clone) (*pgxpool.Pool, error) {
+	conn, err := pgxpool.Connect(context.Background(), dblabClone.ConnectionString())
 	if err != nil {
 		log.Err("DB connection:", err)
 		return nil, err
 	}
 
-	if err := db.PingContext(context.TODO()); err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return db, nil
+	return conn, nil
 }
 
 // createDBLabClone creates a new clone.
