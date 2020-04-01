@@ -24,12 +24,6 @@ const (
 	SystemPQErrorCodeUndefinedFile = "58P01"
 )
 
-// DBExec executes query without returning results.
-func DBExec(db *pgxpool.Pool, query string) error {
-	_, err := runQuery(context.TODO(), db, query, true)
-	return err
-}
-
 // DBQuery runs query and returns table results.
 func DBQuery(db *pgxpool.Pool, query string, args ...interface{}) ([][]string, error) {
 	return runTableQuery(context.TODO(), db, query, args...)
@@ -37,35 +31,35 @@ func DBQuery(db *pgxpool.Pool, query string, args ...interface{}) ([][]string, e
 
 // DBQueryWithResponse runs query with returning results.
 func DBQueryWithResponse(db *pgxpool.Pool, query string) (string, error) {
-	return runQuery(context.TODO(), db, query, false)
+	return runQuery(context.TODO(), db, query)
 }
 
-func runQuery(ctx context.Context, db *pgxpool.Pool, query string, omitResp bool, args ...interface{}) (string, error) {
+func runQuery(ctx context.Context, db *pgxpool.Pool, query string) (string, error) {
 	log.Dbg("DB query:", query)
 
 	// TODO(anatoly): Retry mechanic.
 	var result = ""
 
-	rows, err := db.Query(ctx, query, args...)
+	rows, err := db.Query(ctx, query)
 	if err != nil {
 		log.Err("DB query:", err)
 		return "", clarifyQueryError([]byte(query), err)
 	}
 	defer rows.Close()
 
-	if !omitResp {
-		for rows.Next() {
-			var s string
-			if err := rows.Scan(&s); err != nil {
-				log.Err("DB query traversal:", err)
-				return s, err
-			}
-			result += s + "\n"
-		}
-		if err := rows.Err(); err != nil {
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
 			log.Err("DB query traversal:", err)
-			return result, err
+			return s, err
 		}
+
+		result += s + "\n"
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Err("DB query traversal:", err)
+		return result, err
 	}
 
 	return result, nil

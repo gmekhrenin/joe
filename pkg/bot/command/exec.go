@@ -5,6 +5,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/pkg/bot/api"
-	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/util"
@@ -47,7 +47,7 @@ func (cmd ExecCmd) Execute() error {
 	}
 
 	start := time.Now()
-	err := querier.DBExec(cmd.db, cmd.apiCommand.Query)
+	_, err := cmd.db.Exec(context.TODO(), cmd.apiCommand.Query)
 	elapsed := time.Since(start)
 	if err != nil {
 		log.Err("Exec:", err)
