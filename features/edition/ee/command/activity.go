@@ -48,14 +48,18 @@ func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *sql.DB, mes
 func (c *ActivityCmd) Execute() error {
 	const truncateLength = 50
 
-	query := fmt.Sprintf(`select pid, 
-	(case when (query != '' and length(query) > %[1]d) then left(query, %[1]d) || '...' else query end) as query, 
-	coalesce(state,'') as state, 
-	wait_event, 
-	backend_type, 
-	(case when query_start is not null then (NOW()-query_start)::text else '' end) as duration
-	from pg_stat_activity 
-	where state IN('active', 'idle in transaction') AND pid <> pg_backend_pid();`, truncateLength)
+	query := fmt.Sprintf(`select
+  pid,
+  (case when (query <> '' and length(query) > %[1]d) then left(query, %[1]d) || '...' else query end) as query,
+  coalesce(state, '') as state,
+  wait_event,
+  wait_event_type,
+  backend_type,
+  coalesce(now() - xact_start)::text, '') as xact_duration,
+  coalesce(now() - query_start)::text, '') as query_duration,
+  coalesce(now() - state_change)::text, '') as state_changed_ago
+from pg_stat_activity 
+where state in ('active', 'idle in transaction') and pid <> pg_backend_pid();`, truncateLength)
 
 	tableString := &strings.Builder{}
 	tableString.WriteString(ActivityCaption)
