@@ -14,7 +14,7 @@ const (
 	edition               = "Community Edition"
 	enterpriseHelpMessage = "\n*Enterprise edition commands*:\n" +
 		"• `activity` — show currently running sessions in Postgres (states: `active`, `idle in transaction`). Not supported in CE version\n" +
-		"• `terminate` — terminate a backend. Not supported in CE version\n"
+		"• `terminate [pid]` — terminate Postgres backend that has the specified PID. Not supported in CE version\n"
 )
 
 // Entertainer implements entertainer interface for the Community edition.
