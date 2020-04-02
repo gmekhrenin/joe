@@ -275,6 +275,6 @@ type PostMessageResponse struct {
 // AddArtifactResponse represents a response of an artifact uploading.
 type AddArtifactResponse struct {
 	APIResponse
-	ArtifactID   string `json:"artifact_id"`
+	ArtifactID   int    `json:"artifact_id"`
 	ArtifactLink string `json:"artifact_link"`
 }
