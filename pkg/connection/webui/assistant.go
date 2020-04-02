@@ -19,6 +19,7 @@ import (
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
+	"gitlab.com/postgres-ai/joe/features"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
@@ -38,10 +39,12 @@ type Assistant struct {
 	msgProcessors  map[string]connection.MessageProcessor
 	prefix         string
 	appCfg         *config.Config
+	commandBuilder features.CommandFactoryMethod
 }
 
 // NewAssistant returns a new assistant service.
-func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix string) *Assistant {
+func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix string,
+	cmdBuilder features.CommandFactoryMethod) *Assistant {
 	prefix := fmt.Sprintf("/%s", strings.Trim(handlerPrefix, "/"))
 
 	assistant := &Assistant{
@@ -49,6 +52,7 @@ func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix 
 		appCfg:         appCfg,
 		msgProcessors:  make(map[string]connection.MessageProcessor),
 		prefix:         prefix,
+		commandBuilder: cmdBuilder,
 	}
 
 	return assistant
@@ -113,7 +117,7 @@ func (a *Assistant) buildMessageProcessor(appCfg *config.Config, dbLabInstance *
 	}
 
 	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, platformClient,
-		processingCfg), nil
+		processingCfg, a.commandBuilder), nil
 }
 
 // addProcessingService adds a message processor for a specific channel.

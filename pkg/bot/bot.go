@@ -18,6 +18,7 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/client/dblabapi"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
+	"gitlab.com/postgres-ai/joe/features"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/connection/slack"
@@ -31,20 +32,32 @@ const InactiveCloneCheckInterval = time.Minute
 
 // App defines a application struct.
 type App struct {
-	Config   config.Config
-	spaceCfg *config.Space
+	Config     config.Config
+	spaceCfg   *config.Space
+	enterprise *EEFeatures
 
 	dblabMu        *sync.RWMutex
 	dblabInstances map[string]*dblab.Instance
 }
 
+// EEFeatures defines enterprise feature helpers.
+type EEFeatures struct {
+	cmdBuilder features.CommandFactoryMethod
+}
+
+// NewEnterprise creates a new Enterprise struct.
+func NewEnterprise(cmdBuilder features.CommandFactoryMethod) *EEFeatures {
+	return &EEFeatures{cmdBuilder: cmdBuilder}
+}
+
 // Creates a new application.
-func NewApp(cfg config.Config, spaceCfg *config.Space) *App {
+func NewApp(cfg config.Config, spaceCfg *config.Space, enterprise *EEFeatures) *App {
 	bot := App{
 		Config:         cfg,
 		spaceCfg:       spaceCfg,
 		dblabMu:        &sync.RWMutex{},
 		dblabInstances: make(map[string]*dblab.Instance, len(spaceCfg.DBLabInstances)),
+		enterprise:     enterprise,
 	}
 
 	return &bot
@@ -140,10 +153,10 @@ func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) 
 
 	switch workspaceType {
 	case slack.WorkspaceType:
-		return slack.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
+		return slack.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.enterprise.cmdBuilder), nil
 
 	case webui.WorkspaceType:
-		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix), nil
+		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.enterprise.cmdBuilder), nil
 
 	default:
 		return nil, errors.New("unknown workspace type given")

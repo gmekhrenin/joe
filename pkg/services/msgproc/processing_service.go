@@ -19,10 +19,11 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
 
+	"gitlab.com/postgres-ai/joe/features"
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
-	"gitlab.com/postgres-ai/joe/pkg/ee"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 	"gitlab.com/postgres-ai/joe/pkg/services/platform"
@@ -33,12 +34,14 @@ import (
 
 // Constants declare supported commands.
 const (
-	CommandExplain = "explain"
-	CommandExec    = "exec"
-	CommandReset   = "reset"
-	CommandHelp    = "help"
-	CommandHypo    = "hypo"
-	CommandPlan    = "plan"
+	CommandExplain   = "explain"
+	CommandExec      = "exec"
+	CommandReset     = "reset"
+	CommandHelp      = "help"
+	CommandHypo      = "hypo"
+	CommandActivity  = "activity"
+	CommandTerminate = "terminate"
+	CommandPlan      = "plan"
 
 	CommandPsqlD   = `\d`
 	CommandPsqlDP  = `\d+`
@@ -92,6 +95,7 @@ var allowedPsqlCommands = []string{
 }
 
 type ProcessingService struct {
+	commandBuilder   features.CommandFactoryMethod
 	messageValidator connection.MessageValidator
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
@@ -116,8 +120,10 @@ var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, platform *platform.Client, cfg ProcessingConfig) *ProcessingService {
+	userSvc *usermanager.UserManager, platform *platform.Client, cfg ProcessingConfig,
+	cmdBuilder features.CommandFactoryMethod) *ProcessingService {
 	return &ProcessingService{
+		commandBuilder:   cmdBuilder,
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
@@ -220,7 +226,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	queryPreview, _ = text.CutText(queryPreview, QueryPreviewSize, SeparatorEllipsis)
 
 	if s.config.App.AuditEnabled {
-		audit, err := json.Marshal(ee.Audit{
+		audit, err := json.Marshal(models.Audit{
 			ID:       user.UserInfo.ID,
 			Name:     user.UserInfo.Name,
 			RealName: user.UserInfo.RealName,
@@ -246,7 +252,10 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	if receivedCommand == CommandHelp {
 		msg := models.NewMessage(incomingMessage)
 
-		msgText = appendHelp(msgText, s.config.App.Version)
+		// TODO (akartasov): make a separate interface.
+		helper := s.commandBuilder(nil, nil, nil, nil)
+
+		msgText = s.appendHelp(helper, msgText)
 		msgText = appendSessionID(msgText, user)
 		msg.SetText(msgText)
 
@@ -315,6 +324,14 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 			hypoCmd := command.NewHypo(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 			err = hypoCmd.Execute()
 
+		case receivedCommand == CommandActivity:
+			activityCmd := s.commandBuilder(platformCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
+			err = activityCmd.Execute()
+
+		case receivedCommand == CommandTerminate:
+			terminateCmd := s.commandBuilder(platformCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
+			err = terminateCmd.Execute()
+
 		case util.Contains(allowedPsqlCommands, receivedCommand):
 			runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
 			err = command.Transmit(platformCmd, msg, s.messenger, runner)
@@ -365,6 +382,8 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		}
 	}
 
+	user.Session.LastActionTs = time.Now()
+
 	if err := s.messenger.OK(msg); err != nil {
 		log.Err(err)
 	}
@@ -414,6 +433,20 @@ func (s *ProcessingService) showBotHints(incomingMessage models.IncomingMessage,
 	}
 }
 
+func (s *ProcessingService) appendHelp(helper definition.EnterpriseHelpMessenger, text string) string {
+	sb := strings.Builder{}
+
+	sb.WriteString(text)
+	sb.WriteString(HelpMessage)
+	sb.WriteString(helper.GetEnterpriseHelpMessage())
+
+	sb.WriteString("Version: ")
+	sb.WriteString(s.config.App.Version)
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
 // TODO(akartasov): refactor to slice of bytes.
 func formatMessage(msg string) string {
 	// Slack escapes some characters
@@ -447,8 +480,4 @@ func appendSessionID(text string, u *usermanager.User) string {
 	}
 
 	return text + s
-}
-
-func appendHelp(text string, version string) string {
-	return text + HelpMessage + fmt.Sprintf("Version: %s\n", version)
 }
