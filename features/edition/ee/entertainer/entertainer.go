@@ -14,8 +14,8 @@ import (
 // Constants provide features description.
 const (
 	edition               = "Enterprise Edition"
-	enterpriseHelpMessage = "• `activity` — show information related to the current activity of that process\n" +
-		"• `terminate` — terminate a backend\n"
+	enterpriseHelpMessage = "• `activity` — show currently running sessions in Postgres (states: `active`, `idle in transaction`, `disabled`)\n" +
+		"• `terminate [pid]` — terminate Postgres backend that has the specified PID.\n"
 )
 
 // Entertainer implements entertainer interface for the Enterprise edition.

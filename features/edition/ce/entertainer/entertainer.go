@@ -13,7 +13,7 @@ import (
 const (
 	edition               = "Community Edition"
 	enterpriseHelpMessage = "\n*Enterprise edition commands*:\n" +
-		"• `activity` — show currently running sessions in Postgres (states: `active`, `idle in transaction`). Not supported in CE version\n" +
+		"• `activity` — show currently running sessions in Postgres (states: `active`, `idle in transaction`, `disabled`). Not supported in CE version\n" + //nolint:lll
 		"• `terminate [pid]` — terminate Postgres backend that has the specified PID. Not supported in CE version\n"
 )
 
