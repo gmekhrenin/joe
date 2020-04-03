@@ -68,7 +68,7 @@ func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix 
 
 func (a *Assistant) validateCredentials() error {
 	if a.credentialsCfg == nil || a.credentialsCfg.AccessToken == "" || a.credentialsCfg.SigningSecret == "" {
-		return errors.New("access_token and signing_secret must not be empty")
+		return errors.New(`"accessToken" and "signingSecret" must not be empty`)
 	}
 
 	return nil
