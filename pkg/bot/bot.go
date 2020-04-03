@@ -97,6 +97,13 @@ func (a *App) RunServer(ctx context.Context) error {
 }
 
 func (a *App) initDBLabInstances() error {
+	const maxDBLabInstance = 1
+
+	if len(a.spaceCfg.DBLabInstances) > maxDBLabInstance {
+		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
+			"Please correct the `dblabs` section in the configuration file or upgrade your plan: https://postgres.ai", maxDBLabInstance)
+	}
+
 	for name, dbLab := range a.spaceCfg.DBLabInstances {
 		if err := a.validateDBLabInstance(dbLab); err != nil {
 			return errors.Wrapf(err, "failed to init %q", name)
