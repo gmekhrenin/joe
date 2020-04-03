@@ -101,7 +101,7 @@ func (a *App) initDBLabInstances() error {
 
 	if len(a.spaceCfg.DBLabInstances) > maxDBLabInstance {
 		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
-			"Please correct the `dblabs` section in the configuration file or upgrade your plan: https://postgres.ai", maxDBLabInstance)
+			"Please correct the `dblabs` section in the configuration file or upgrade your plan to Enterprise Edition", maxDBLabInstance)
 	}
 
 	for name, dbLab := range a.spaceCfg.DBLabInstances {
