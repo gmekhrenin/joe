@@ -97,7 +97,7 @@ func (a *App) RunServer(ctx context.Context) error {
 }
 
 func (a *App) initDBLabInstances() error {
-	const maxDBLabInstance = 1
+	const maxDBLabInstance = 2
 
 	if len(a.spaceCfg.DBLabInstances) > maxDBLabInstance {
 		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
