@@ -51,12 +51,12 @@ func (s *ProcessingService) CheckIdleSessions(ctx context.Context) {
 
 		log.Dbg("Session idle: %v %v", user, user.Session)
 
-		s.stopSession(user)
-
 		if user.Session.Direct {
 			directToNotify = append(directToNotify, getSessionID(user))
 			continue
 		}
+
+		s.stopSession(user)
 
 		channelsToNotify[user.Session.ChannelID] = append(channelsToNotify[user.Session.ChannelID], user.UserInfo.ID)
 	}
