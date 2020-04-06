@@ -32,6 +32,7 @@ func (m Messenger) postMessage(ctx context.Context, message *models.Message) err
 		MessageID: message.MessageID,
 		Text:      message.Text,
 		Status:    string(message.Status),
+		SessionID: message.SessionID,
 	}
 
 	messageID, err := m.api.PostMessage(ctx, postMessage)

@@ -236,6 +236,7 @@ func (m *Message) ToIncomingMessage() models.IncomingMessage {
 		Timestamp: m.Timestamp,
 		CommandID: m.CommandID,
 		SessionID: m.SessionID,
+		Direct:    true,
 	}
 
 	return incomingMessage

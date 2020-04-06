@@ -157,6 +157,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	user.Session.LastActionTs = time.Now()
 	user.Session.ChannelID = incomingMessage.ChannelID
 	user.Session.PlatformSessionID = incomingMessage.SessionID
+	user.Session.Direct = incomingMessage.Direct
 
 	// Filter and prepare message.
 	message := strings.TrimSpace(incomingMessage.Text)
@@ -468,14 +469,7 @@ func formatMessage(msg string) string {
 func appendSessionID(text string, u *usermanager.User) string {
 	s := "No session\n"
 
-	if u != nil && u.Session.Clone != nil && u.Session.Clone.ID != "" {
-		sessionID := u.Session.Clone.ID
-
-		// Use session ID from platform if it's defined.
-		if u.Session.PlatformSessionID != "" {
-			sessionID = u.Session.PlatformSessionID
-		}
-
+	if sessionID := getSessionID(u); sessionID != "" {
 		s = fmt.Sprintf("Session: `%s`\n", sessionID)
 	}
 

@@ -38,12 +38,14 @@ type IncomingMessage struct {
 	ThreadID    string
 	CommandID   string
 	SessionID   string
+	Direct      bool
 }
 
 // Message struct defines an output message.
 type Message struct {
 	MessageID   string
 	CommandID   string
+	SessionID   string
 	MessageType int
 	Status      MessageStatus
 	ChannelID   string

@@ -170,6 +170,7 @@ type PostMessage struct {
 	MessageID string `json:"message_id"`
 	Text      string `json:"text"`
 	Status    string `json:"status"`
+	SessionID string `json:"session_id"`
 }
 
 // PostMessage makes an HTTP request to post a new message to Platform.
