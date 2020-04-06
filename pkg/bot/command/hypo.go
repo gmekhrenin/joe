@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/pkg/errors"
 
-	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 )
 
 // Hypo sub-commands
@@ -36,19 +36,19 @@ For a quick start, you can use prepared images: https://hub.docker.com/repositor
 
 // HypoCmd defines a hypo command.
 type HypoCmd struct {
-	apiCommand *api.ApiCommand
-	message    *models.Message
-	db         *pgxpool.Pool
-	messenger  connection.Messenger
+	command   *platform.Command
+	message   *models.Message
+	db        *pgxpool.Pool
+	messenger connection.Messenger
 }
 
 // NewHypo creates a new Hypo command.
-func NewHypo(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, msgSvc connection.Messenger) *HypoCmd {
+func NewHypo(cmd *platform.Command, msg *models.Message, db *pgxpool.Pool, msgSvc connection.Messenger) *HypoCmd {
 	return &HypoCmd{
-		apiCommand: apiCmd,
-		message:    msg,
-		db:         db,
-		messenger:  msgSvc,
+		command:   cmd,
+		message:   msg,
+		db:        db,
+		messenger: msgSvc,
 	}
 }
 
@@ -92,7 +92,7 @@ func (h *HypoCmd) Execute() error {
 func (h *HypoCmd) parseQuery() (string, string) {
 	const splitParts = 2
 
-	parts := strings.SplitN(h.apiCommand.Query, " ", splitParts)
+	parts := strings.SplitN(h.command.Query, " ", splitParts)
 
 	hypoSubcommand := strings.ToLower(parts[0])
 
@@ -110,7 +110,7 @@ func (h *HypoCmd) initExtension(ctx context.Context) error {
 }
 
 func (h *HypoCmd) create(ctx context.Context) error {
-	res, err := querier.DBQuery(ctx, h.db, "select indexrelid::text, indexname from hypopg_create_index($1)", h.apiCommand.Query)
+	res, err := querier.DBQuery(ctx, h.db, "select indexrelid::text, indexname from hypopg_create_index($1)", h.command.Query)
 	if err != nil {
 		return errors.Wrap(err, "failed to run creation query")
 	}

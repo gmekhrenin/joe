@@ -16,10 +16,10 @@ import (
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
-	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/querier"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 )
 
 // ActivityCaption contains caption for rendered tables.
@@ -27,21 +27,21 @@ const ActivityCaption = "*Activity response:*\n"
 
 // ActivityCmd defines the activity command.
 type ActivityCmd struct {
-	apiCommand *api.ApiCommand
-	message    *models.Message
-	db         *pgxpool.Pool
-	messenger  connection.Messenger
+	command   *platform.Command
+	message   *models.Message
+	db        *pgxpool.Pool
+	messenger connection.Messenger
 }
 
 var _ definition.Executor = (*ActivityCmd)(nil)
 
 // NewActivityCmd return a new exec command.
-func NewActivityCmd(apiCmd *api.ApiCommand, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *ActivityCmd {
+func NewActivityCmd(cmd *platform.Command, msg *models.Message, db *pgxpool.Pool, messengerSvc connection.Messenger) *ActivityCmd {
 	return &ActivityCmd{
-		apiCommand: apiCmd,
-		message:    msg,
-		db:         db,
-		messenger:  messengerSvc,
+		command:   cmd,
+		message:   msg,
+		db:        db,
+		messenger: messengerSvc,
 	}
 }
 

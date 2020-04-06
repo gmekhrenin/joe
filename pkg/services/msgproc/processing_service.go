@@ -20,12 +20,12 @@ import (
 	"gitlab.com/postgres-ai/database-lab/pkg/util"
 
 	"gitlab.com/postgres-ai/joe/features"
-	"gitlab.com/postgres-ai/joe/pkg/bot/api"
 	"gitlab.com/postgres-ai/joe/pkg/bot/command"
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/models"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
+	"gitlab.com/postgres-ai/joe/pkg/services/platform"
 	"gitlab.com/postgres-ai/joe/pkg/services/usermanager"
 	"gitlab.com/postgres-ai/joe/pkg/transmission/pgtransmission"
 	"gitlab.com/postgres-ai/joe/pkg/util/text"
@@ -101,10 +101,10 @@ type ProcessingService struct {
 	messenger        connection.Messenger
 	DBLab            *dblabapi.Client
 	UserManager      *usermanager.UserManager
+	platformManager  *platform.Client
 	config           ProcessingConfig
 
 	// TODO (akartasov): Add specific services.
-	//PlatformManager
 	//Auditor
 	//Limiter
 }
@@ -121,19 +121,21 @@ var spaceRegex = regexp.MustCompile(`\s+`)
 
 // NewProcessingService creates a new processing service.
 func NewProcessingService(messengerSvc connection.Messenger, msgValidator connection.MessageValidator, dblab *dblabapi.Client,
-	userSvc *usermanager.UserManager, cfg ProcessingConfig, featurePack *features.Pack) *ProcessingService {
+	userSvc *usermanager.UserManager, platform *platform.Client, cfg ProcessingConfig,
+	featurePack *features.Pack) *ProcessingService {
 	return &ProcessingService{
 		featurePack:      featurePack,
 		messageValidator: msgValidator,
 		messenger:        messengerSvc,
 		DBLab:            dblab,
 		UserManager:      userSvc,
+		platformManager:  platform,
 		config:           cfg,
 	}
 }
 
 // ProcessMessageEvent replies to a message.
-func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingMessage) {
+func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMessage models.IncomingMessage) {
 	// Filter incoming message.
 	if err := s.messageValidator.Validate(&incomingMessage); err != nil {
 		log.Err(errors.Wrap(err, "incoming message is invalid"))
@@ -145,7 +147,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if err != nil {
 		log.Err(errors.Wrap(err, "failed to get user"))
 
-		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to get user"))
 			return
 		}
@@ -153,7 +155,10 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		return
 	}
 
+	user.Session.LastActionTs = time.Now()
 	user.Session.ChannelID = incomingMessage.ChannelID
+	user.Session.PlatformSessionID = incomingMessage.SessionID
+	user.Session.Direct = incomingMessage.Direct
 
 	// Filter and prepare message.
 	message := strings.TrimSpace(incomingMessage.Text)
@@ -169,7 +174,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		if err != nil {
 			log.Err(err)
 
-			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to download artifact"))
 				return
 			}
@@ -209,7 +214,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	if err := user.RequestQuota(); err != nil {
 		log.Err("Quota: ", err)
 
-		if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+		if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 			log.Err(errors.Wrap(err, "failed to request quotas"))
 			return
 		}
@@ -232,7 +237,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		})
 
 		if err != nil {
-			if err := s.messenger.Fail(models.NewMessage(incomingMessage.ChannelID), err.Error()); err != nil {
+			if err := s.messenger.Fail(models.NewMessage(incomingMessage), err.Error()); err != nil {
 				log.Err(errors.Wrap(err, "failed to marshal Audit struct"))
 				return
 			}
@@ -247,7 +252,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 
 	// Show `help` command without initializing of a session.
 	if receivedCommand == CommandHelp {
-		msg := models.NewMessage(incomingMessage.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 
 		msgText = s.appendHelp(msgText)
 		msgText = appendSessionID(msgText, user)
@@ -261,12 +266,12 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		return
 	}
 
-	if err := s.runSession(context.TODO(), user, incomingMessage.ChannelID); err != nil {
+	if err := s.runSession(ctx, user, incomingMessage); err != nil {
 		log.Err(err)
 		return
 	}
 
-	msg := models.NewMessage(incomingMessage.ChannelID)
+	msg := models.NewMessage(incomingMessage)
 
 	msgText = appendSessionID(msgText, user)
 	msg.SetText(msgText)
@@ -288,47 +293,55 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 		log.Err(err)
 	}
 
-	apiCmd := &api.ApiCommand{
-		AccessToken: s.config.Platform.Token,
-		ApiURL:      s.config.Platform.URL,
-		SessionId:   user.Session.PlatformSessionID,
-		Command:     receivedCommand,
-		Query:       query,
-		SlackTs:     incomingMessage.Timestamp,
+	platformCmd := &platform.Command{
+		SessionID: user.Session.PlatformSessionID,
+		Command:   receivedCommand,
+		Query:     query,
+		Timestamp: incomingMessage.Timestamp,
 	}
 
 	switch {
 	case receivedCommand == CommandExplain:
-		err = command.Explain(s.messenger, apiCmd, msg, s.config.Explain, user.Session.CloneConnection)
+		err = command.Explain(s.messenger, platformCmd, msg, s.config.Explain, user.Session.CloneConnection)
 
 	case receivedCommand == CommandPlan:
-		planCmd := command.NewPlan(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		planCmd := command.NewPlan(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 		err = planCmd.Execute()
 
 	case receivedCommand == CommandExec:
-		execCmd := command.NewExec(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		execCmd := command.NewExec(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 		err = execCmd.Execute()
 
 	case receivedCommand == CommandReset:
-		err = command.ResetSession(context.TODO(), apiCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
+		err = command.ResetSession(ctx, platformCmd, msg, s.DBLab, user.Session.Clone.ID, s.messenger)
+		// TODO(akartasov): Find permanent solution,
+		//  it's a temporary fix for https://gitlab.com/postgres-ai/joe/-/issues/132.
+		if err != nil {
+			// Try to reboot the session.
+			if err := s.rebootSession(msg, user); err != nil {
+				log.Err(err)
+			}
+
+			return
+		}
 
 	case receivedCommand == CommandHypo:
-		hypoCmd := command.NewHypo(apiCmd, msg, user.Session.CloneConnection, s.messenger)
+		hypoCmd := command.NewHypo(platformCmd, msg, user.Session.CloneConnection, s.messenger)
 		err = hypoCmd.Execute()
 
 	case receivedCommand == CommandActivity:
 		cmdBuilder := s.featurePack.CmdBuilder()
-		activityCmd := cmdBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
+		activityCmd := cmdBuilder(platformCmd, msg, user.Session.CloneConnection, s.messenger).BuildActivityCmd()
 		err = activityCmd.Execute()
 
 	case receivedCommand == CommandTerminate:
 		cmdBuilder := s.featurePack.CmdBuilder()
-		terminateCmd := cmdBuilder(apiCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
+		terminateCmd := cmdBuilder(platformCmd, msg, user.Session.CloneConnection, s.messenger).BuildTerminateCmd()
 		err = terminateCmd.Execute()
 
 	case util.Contains(allowedPsqlCommands, receivedCommand):
 		runner := pgtransmission.NewPgTransmitter(user.Session.ConnParams, pgtransmission.LogsEnabledDefault)
-		err = command.Transmit(apiCmd, msg, s.messenger, runner)
+		err = command.Transmit(platformCmd, msg, s.messenger, runner)
 	}
 
 	if err != nil {
@@ -337,19 +350,27 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 				log.Err(err)
 			}
 
-			apiCmd.Fail(err.Error())
+			platformCmd.Error = err.Error()
+			if _, err := s.platformManager.PostCommand(ctx, platformCmd); err != nil {
+				log.Err(fmt.Sprintf("failed to post platform command: %+v", err))
+			}
 
 			return
 		}
 
-		if !s.isActiveSession(context.TODO(), user.Session.Clone.ID) {
+		if !s.isActiveSession(ctx, user.Session.Clone.ID) {
 			msg.AppendText("Session was closed by Database Lab.\n")
 			if err := s.messenger.UpdateText(msg); err != nil {
 				log.Err(fmt.Sprintf("failed to append message on session close: %+v", err))
 			}
 			s.stopSession(user)
 
-			if err := s.runSession(context.TODO(), user, msg.ChannelID); err != nil {
+			im := models.IncomingMessage{
+				ChannelID: msg.ChannelID,
+				CommandID: msg.CommandID,
+			}
+
+			if err := s.runSession(ctx, user, im); err != nil {
 				log.Err(err)
 				return
 			}
@@ -357,7 +378,7 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 
 	if s.config.Platform.HistoryEnabled {
-		if _, err := apiCmd.Post(); err != nil {
+		if _, err := s.platformManager.PostCommand(ctx, platformCmd); err != nil {
 			log.Err(err)
 
 			if err := s.messenger.Fail(msg, err.Error()); err != nil {
@@ -375,9 +396,26 @@ func (s *ProcessingService) ProcessMessageEvent(incomingMessage models.IncomingM
 	}
 }
 
+// rebootSession stops a Joe session and creates a new one.
+func (s *ProcessingService) rebootSession(msg *models.Message, user *usermanager.User) error {
+	msg.AppendText("Session was closed by Database Lab.\n")
+
+	if err := s.messenger.UpdateText(msg); err != nil {
+		return errors.Wrapf(err, "failed to append message on session close: %+v", err)
+	}
+
+	s.stopSession(user)
+
+	if err := s.runSession(context.TODO(), user, models.IncomingMessage{ChannelID: msg.ChannelID}); err != nil {
+		return errors.Wrap(err, "failed to run session")
+	}
+
+	return nil
+}
+
 // ProcessAppMentionEvent replies to an application mention event.
 func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage models.IncomingMessage) {
-	msg := models.NewMessage(incomingMessage.ChannelID)
+	msg := models.NewMessage(incomingMessage)
 
 	msg.SetText("What's up? Send `help` to see the list of available commands.")
 
@@ -389,7 +427,7 @@ func (s *ProcessingService) ProcessAppMentionEvent(incomingMessage models.Incomi
 }
 
 // Show bot usage hints.
-func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command string, query string) {
+func (s *ProcessingService) showBotHints(incomingMessage models.IncomingMessage, command string, query string) {
 	parts := strings.SplitN(query, " ", 2)
 	firstQueryWord := strings.ToLower(parts[0])
 
@@ -397,9 +435,9 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 
 	if (checkQuery && util.Contains(hintExplainDmlWords, firstQueryWord)) ||
 		util.Contains(hintExplainDmlWords, command) {
-		msg := models.NewMessage(ev.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 		msg.SetMessageType(models.MessageTypeEphemeral)
-		msg.SetUserID(ev.UserID)
+		msg.SetUserID(incomingMessage.UserID)
 		msg.SetText(HintExplain)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -408,9 +446,9 @@ func (s *ProcessingService) showBotHints(ev models.IncomingMessage, command stri
 	}
 
 	if util.Contains(hintExecDdlWords, command) {
-		msg := models.NewMessage(ev.ChannelID)
+		msg := models.NewMessage(incomingMessage)
 		msg.SetMessageType(models.MessageTypeEphemeral)
-		msg.SetUserID(ev.UserID)
+		msg.SetUserID(incomingMessage.UserID)
 		msg.SetText(HintExec)
 
 		if err := s.messenger.Publish(msg); err != nil {
@@ -452,14 +490,7 @@ func formatMessage(msg string) string {
 func appendSessionID(text string, u *usermanager.User) string {
 	s := "No session\n"
 
-	if u != nil && u.Session.Clone != nil && u.Session.Clone.ID != "" {
-		sessionID := u.Session.Clone.ID
-
-		// Use session ID from platform if it's defined.
-		if u.Session.PlatformSessionID != "" {
-			sessionID = u.Session.PlatformSessionID
-		}
-
+	if sessionID := getSessionID(u); sessionID != "" {
 		s = fmt.Sprintf("Session: `%s`\n", sessionID)
 	}
 
