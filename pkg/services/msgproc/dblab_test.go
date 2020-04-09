@@ -24,8 +24,7 @@ func TestForeword(t *testing.T) {
 Made with :hearts: by Postgres.ai. Bug reports, ideas, and merge requests are welcome: https://gitlab.com/postgres-ai/joe 
 
 Joe version: v1.0.0 (CE).
-Database: testdb.
-Snapshot data state at: 2020-04-06 11:30:00 UTC.`
+Database: testdb. Snapshot data state at: 2020-04-06 11:30:00 UTC.`
 	)
 
 	foreword := getForeword(idleDuration, version, edition, dataStateAt, dbName)
