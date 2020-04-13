@@ -33,7 +33,7 @@ const InactiveCloneCheckInterval = time.Minute
 // App defines a application struct.
 type App struct {
 	Config      config.Config
-	spaceCfg    *config.Space
+	mappingCfg  *config.ChannelMapping
 	featurePack *features.Pack
 
 	dblabMu        *sync.RWMutex
@@ -41,12 +41,12 @@ type App struct {
 }
 
 // Creates a new application.
-func NewApp(cfg config.Config, spaceCfg *config.Space, enterprise *features.Pack) *App {
+func NewApp(cfg config.Config, mapping *config.ChannelMapping, enterprise *features.Pack) *App {
 	bot := App{
 		Config:         cfg,
-		spaceCfg:       spaceCfg,
+		mappingCfg:     mapping,
 		dblabMu:        &sync.RWMutex{},
-		dblabInstances: make(map[string]*dblab.Instance, len(spaceCfg.DBLabInstances)),
+		dblabInstances: make(map[string]*dblab.Instance, len(mapping.DBLabInstances)),
 		featurePack:    enterprise,
 	}
 
@@ -87,13 +87,13 @@ func (a *App) RunServer(ctx context.Context) error {
 }
 
 func (a *App) initDBLabInstances() error {
-	if len(a.spaceCfg.DBLabInstances) > int(a.Config.App.MaxDBLabInstances) {
+	if len(a.mappingCfg.DBLabInstances) > int(a.Config.App.MaxDBLabInstances) {
 		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
 			"Please correct the `dblabs` section in the configuration file or upgrade your plan to Enterprise Edition",
 			a.Config.App.MaxDBLabInstances)
 	}
 
-	for name, dbLab := range a.spaceCfg.DBLabInstances {
+	for name, dbLab := range a.mappingCfg.DBLabInstances {
 		if err := a.validateDBLabInstance(dbLab); err != nil {
 			return errors.Wrapf(err, "failed to init %q", name)
 		}
@@ -108,7 +108,7 @@ func (a *App) initDBLabInstances() error {
 		}
 
 		a.dblabMu.Lock()
-		a.dblabInstances[name] = dblab.NewDBLabInstance(dbLabClient, dbLab)
+		a.dblabInstances[name] = dblab.NewDBLabInstance(dbLabClient)
 		a.dblabMu.Unlock()
 	}
 
@@ -116,7 +116,7 @@ func (a *App) initDBLabInstances() error {
 }
 
 func (a *App) validateDBLabInstance(instance config.DBLabInstance) error {
-	if instance.URL == "" || instance.Token == "" || instance.DBName == "" {
+	if instance.URL == "" || instance.Token == "" {
 		return errors.New("invalid DBLab Instance config given")
 	}
 
@@ -126,7 +126,7 @@ func (a *App) validateDBLabInstance(instance config.DBLabInstance) error {
 func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 	assistants := []connection.Assistant{}
 
-	for workspaceType, workspaceList := range a.spaceCfg.Connections {
+	for workspaceType, workspaceList := range a.mappingCfg.CommunicationTypes {
 		for _, workspace := range workspaceList {
 			assist, err := a.getAssistant(workspaceType, workspace)
 			if err != nil {
@@ -144,14 +144,14 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 	return assistants, nil
 }
 
-func (a *App) getAssistant(workspaceType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
-	handlerPrefix := fmt.Sprintf("/%s", workspaceType)
+func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
+	handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
 
-	switch workspaceType {
-	case slack.WorkspaceType:
+	switch communicationTypeType {
+	case slack.CommunicationType:
 		return slack.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.featurePack), nil
 
-	case webui.WorkspaceType:
+	case webui.CommunicationType:
 		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.featurePack), nil
 
 	default:
@@ -170,6 +170,7 @@ func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace conf
 		}
 
 		a.dblabMu.RUnlock()
+		dbLabInstance.SetCfg(channel.DBLabParams)
 
 		if err := assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance); err != nil {
 			return errors.Wrap(err, "failed to add a DBLab instance")

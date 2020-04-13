@@ -22,7 +22,7 @@ type Config struct {
 	Quota                    Quota
 	MinNotifyDurationMinutes uint
 	Platform                 Platform
-	Space                    *Space
+	ChannelMapping           *ChannelMapping
 }
 
 // App defines a general application configuration.
@@ -48,18 +48,16 @@ type Platform struct {
 	HistoryEnabled bool
 }
 
-// Space contains configuration parameters of connections and Database Labs.
-type Space struct {
-	Connections    map[string][]Workspace   `yaml:"connections,flow"`
-	DBLabInstances map[string]DBLabInstance `yaml:"dblabs"`
+// ChannelMapping contains configuration parameters of communication types and Database Labs.
+type ChannelMapping struct {
+	CommunicationTypes map[string][]Workspace   `yaml:"communicationTypes,flow"`
+	DBLabInstances     map[string]DBLabInstance `yaml:"dblabServers"`
 }
 
 // DBLabInstance contains Database Lab config.
 type DBLabInstance struct {
-	URL     string `yaml:"url"`
-	Token   string `yaml:"token"`
-	DBName  string `yaml:"dbname"`
-	SSLMode string `yaml:"sslmode"`
+	URL   string `yaml:"url"`
+	Token string `yaml:"token"`
 }
 
 // Workspace defines a connection space.
@@ -77,19 +75,26 @@ type Credentials struct {
 
 // Channel defines a connection channel configuration.
 type Channel struct {
-	ChannelID string `yaml:"channelID" json:"channel_id"`
-	DBLabID   string `yaml:"dblab" json:"-"`
+	ChannelID   string      `yaml:"channelID" json:"channel_id"`
+	DBLabID     string      `yaml:"dblabServer" json:"-"`
+	DBLabParams DBLabParams `yaml:"dblabParams" json:"-"`
+}
+
+// DBLabParams defines database params for clone creation.
+type DBLabParams struct {
+	DBName  string `yaml:"dbname" json:"-"`
+	SSLMode string `yaml:"sslmode" json:"-"`
 }
 
 // Load loads configuration from file.
-func Load(filename string) (*Space, error) {
+func Load(filename string) (*ChannelMapping, error) {
 	//nolint:gosec
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 
-	var config Space
+	var config ChannelMapping
 	if err = yaml.Unmarshal(bytes, &config); err != nil {
 		return nil, err
 	}

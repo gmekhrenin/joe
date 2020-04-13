@@ -1,4 +1,4 @@
-connections:
+communicationTypes:
   slack:
     - name: Workspace
       credentials:
@@ -6,18 +6,22 @@ connections:
         signingSecret: secret_signing
       channels:
         - channelID: channelID1
-          dblab: prod1
+          dblabServer: prod1
+          dblabParams:
+            - dbname: postgres
+              sslmode: disable
   webui:
     - name: WebUI
       credentials:
         signingSecret: secret_signing
       channels:
         - channelID: channelID1
-          dblab: prod1
+          dblabServer: prod1
+          dblabParams:
+            - dbname: postgres
+              sslmode: disable
 
-dblabs:
+dblabServers:
   prod1:
     url: "https://127.0.0.1:3000"
     token: "secret_token"
-    dbname: postgres
-    sslmode: disable

@@ -81,7 +81,7 @@ func main() {
 
 	log.Dbg("git: ", version)
 
-	spaceCfg, err := config.Load("config/config.yml")
+	channelMappingCfg, err := config.Load("config/config.yml")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -107,10 +107,10 @@ func main() {
 			Project:        opts.PlatformProject,
 			HistoryEnabled: opts.HistoryEnabled,
 		},
-		Space: spaceCfg,
+		ChannelMapping: channelMappingCfg,
 	}
 
-	joeBot := bot.NewApp(botCfg, spaceCfg, features.NewPack())
+	joeBot := bot.NewApp(botCfg, channelMappingCfg, features.NewPack())
 	if err := joeBot.RunServer(context.Background()); err != nil {
 		log.Err("HTTP server error:", err)
 	}

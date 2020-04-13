@@ -114,7 +114,7 @@ type ProcessingConfig struct {
 	App      config.App
 	Platform config.Platform
 	Explain  pgexplain.ExplainConfig
-	DBLab    config.DBLabInstance
+	DBLab    config.DBLabParams
 }
 
 var spaceRegex = regexp.MustCompile(`\s+`)
