@@ -1,27 +1,39 @@
-communicationTypes:
-  slack:
-    - name: Workspace
-      credentials:
-        accessToken: access_token
-        signingSecret: secret_signing
-      channels:
-        - channelID: channelID1
-          dblabServer: prod1
-          dblabParams:
-            - dbname: postgres
+app:
+  port: 3001
+  minNotifyDuration: 60s
+  debug: false
+
+platform:
+  url: "https://postgres.ai/api/general"
+  token: ""
+  project: ""
+  historyEnabled: false
+
+channelMapping:
+  communicationTypes:
+    slack:
+      - name: Workspace
+        credentials:
+          accessToken: access_token
+          signingSecret: secret_signing
+        channels:
+          - channelID: channelID1
+            dblabServer: prod1
+            dblabParams:
+              dbname: postgres
               sslmode: disable
-  webui:
-    - name: WebUI
-      credentials:
-        signingSecret: secret_signing
-      channels:
-        - channelID: channelID1
-          dblabServer: prod1
-          dblabParams:
-            - dbname: postgres
+    webui:
+      - name: WebUI
+        credentials:
+          signingSecret: secret_signing
+        channels:
+          - channelID: channelID1
+            dblabServer: prod1
+            dblabParams:
+              dbname: postgres
               sslmode: disable
 
-dblabServers:
-  prod1:
-    url: "https://127.0.0.1:3000"
-    token: "secret_token"
+  dblabServers:
+    prod1:
+      url: "https://127.0.0.1:3000"
+      token: "secret_token"

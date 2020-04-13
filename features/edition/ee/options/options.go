@@ -26,9 +26,15 @@ var _ definition.FlagProvider = (*Extra)(nil)
 // ToOpts returns the EnterpriseOptions struct.
 func (e *Extra) ToOpts() definition.EnterpriseOptions {
 	return definition.EnterpriseOptions{
-		QuotaLimit:    e.QuotaLimit,
-		QuotaInterval: e.QuotaInterval,
-		AuditEnabled:  e.AuditEnabled,
-		DBLabLimit:    e.DBLabLimit,
+		Quota: definition.Quota{
+			Limit:    e.QuotaLimit,
+			Interval: e.QuotaInterval,
+		},
+		Audit: definition.Audit{
+			Enabled: e.AuditEnabled,
+		},
+		DBLab: definition.DBLab{
+			InstanceLimit: e.DBLabLimit,
+		},
 	}
 }

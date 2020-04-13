@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
@@ -25,23 +26,9 @@ import (
 )
 
 var opts struct {
-	// HTTP Server.
-	ServerPort uint `short:"s" long:"http-port" description:"HTTP server port" env:"SERVER_PORT" default:"3001"`
-
-	MinNotifyDuration uint `long:"min-notify-duration" description:"a time interval (in minutes) to notify a user about the finish of a long query" env:"MIN_NOTIFY_DURATION" default:"1"`
-
-	// Platform.
-	PlatformURL     string `long:"platform-url" description:"Postgres.ai platform API base URL" env:"PLATFORM_URL" default:"https://postgres.ai/api/general"` // nolint:lll
-	PlatformToken   string `long:"platform-token" description:"Postgres.ai platform API token" env:"PLATFORM_TOKEN"`
-	PlatformProject string `long:"platform-project" description:"Postgres.ai platform project to assign user sessions" env:"PLATFORM_PROJECT"`
-	HistoryEnabled  bool   `long:"history-enabled" description:"send command and queries history to Postgres.ai platform for collaboration and visualization" env:"HISTORY_ENABLED"` // nolint:lll
-
-	// Dev.
 	DevGitCommitHash string `long:"git-commit-hash" env:"GIT_COMMIT_HASH" default:""`
 	DevGitBranch     string `long:"git-branch" env:"GIT_BRANCH" default:""`
 	DevGitModified   bool   `long:"git-modified" env:"GIT_MODIFIED"`
-
-	Debug bool `long:"debug" description:"Enable a debug mode" env:"JOE_DEBUG"`
 
 	ShowHelp func() error `long:"help" description:"Show this help message"`
 }
@@ -62,55 +49,32 @@ func main() {
 			return
 		}
 
-		log.Err("Args parse error", err)
-		return
+		log.Fatal("Args parse error", err)
 	}
-
-	log.DEBUG = opts.Debug
 
 	// Load and validate configuration files.
 	explainConfig, err := config.LoadExplainConfig()
 	if err != nil {
-		log.Err("Unable to load explain config", err)
-		return
+		log.Fatal("Unable to load explain config", err)
 	}
 
-	log.Dbg("Explain config loaded", explainConfig)
+	var botCfg config.Config
+
+	if err := cleanenv.ReadConfig("config/config.yml", &botCfg); err != nil {
+		log.Fatal(err)
+	}
+
+	log.DEBUG = botCfg.App.Debug
 
 	version := formatBotVersion(opts.DevGitCommitHash, opts.DevGitBranch, opts.DevGitModified)
 
 	log.Dbg("git: ", version)
 
-	channelMappingCfg, err := config.Load("config/config.yml")
-	if err != nil {
-		log.Fatal(err)
-	}
+	botCfg.App.Version = version
+	botCfg.Explain = explainConfig
+	botCfg.EnterpriseOptions = enterpriseFlagProvider.ToOpts()
 
-	enterpriseOptions := enterpriseFlagProvider.ToOpts()
-
-	botCfg := config.Config{
-		App: config.App{
-			Version:                  version,
-			Port:                     opts.ServerPort,
-			AuditEnabled:             enterpriseOptions.AuditEnabled,
-			MinNotifyDurationMinutes: opts.MinNotifyDuration,
-			MaxDBLabInstances:        enterpriseOptions.DBLabLimit,
-		},
-		Explain: explainConfig,
-		Quota: config.Quota{
-			Limit:    enterpriseOptions.QuotaLimit,
-			Interval: enterpriseOptions.QuotaInterval,
-		},
-		Platform: config.Platform{
-			URL:            opts.PlatformURL,
-			Token:          opts.PlatformToken,
-			Project:        opts.PlatformProject,
-			HistoryEnabled: opts.HistoryEnabled,
-		},
-		ChannelMapping: channelMappingCfg,
-	}
-
-	joeBot := bot.NewApp(botCfg, channelMappingCfg, features.NewPack())
+	joeBot := bot.NewApp(botCfg, features.NewPack())
 	if err := joeBot.RunServer(context.Background()); err != nil {
 		log.Err("HTTP server error:", err)
 	}

@@ -120,13 +120,14 @@ func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) (*msgpr
 
 	messenger := NewMessenger(chatAPI, slackCfg)
 	userInformer := NewUserInformer(chatAPI)
-	userManager := usermanager.NewUserManager(userInformer, a.appCfg.Quota)
+	userManager := usermanager.NewUserManager(userInformer, a.appCfg.EnterpriseOptions.Quota)
 
 	processingCfg := msgproc.ProcessingConfig{
 		App:      a.appCfg.App,
 		Platform: a.appCfg.Platform,
 		Explain:  a.appCfg.Explain,
 		DBLab:    dbLabInstance.Config(),
+		EntOpts:  a.appCfg.EnterpriseOptions,
 	}
 
 	platformManager, err := platform.NewClient(a.appCfg.Platform)

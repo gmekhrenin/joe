@@ -33,7 +33,6 @@ const InactiveCloneCheckInterval = time.Minute
 // App defines a application struct.
 type App struct {
 	Config      config.Config
-	mappingCfg  *config.ChannelMapping
 	featurePack *features.Pack
 
 	dblabMu        *sync.RWMutex
@@ -41,12 +40,11 @@ type App struct {
 }
 
 // Creates a new application.
-func NewApp(cfg config.Config, mapping *config.ChannelMapping, enterprise *features.Pack) *App {
+func NewApp(cfg config.Config, enterprise *features.Pack) *App {
 	bot := App{
 		Config:         cfg,
-		mappingCfg:     mapping,
 		dblabMu:        &sync.RWMutex{},
-		dblabInstances: make(map[string]*dblab.Instance, len(mapping.DBLabInstances)),
+		dblabInstances: make(map[string]*dblab.Instance, len(cfg.ChannelMapping.DBLabInstances)),
 		featurePack:    enterprise,
 	}
 
@@ -87,13 +85,13 @@ func (a *App) RunServer(ctx context.Context) error {
 }
 
 func (a *App) initDBLabInstances() error {
-	if len(a.mappingCfg.DBLabInstances) > int(a.Config.App.MaxDBLabInstances) {
+	if len(a.Config.ChannelMapping.DBLabInstances) > int(a.Config.EnterpriseOptions.DBLab.InstanceLimit) {
 		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
 			"Please correct the `dblabs` section in the configuration file or upgrade your plan to Enterprise Edition",
-			a.Config.App.MaxDBLabInstances)
+			a.Config.EnterpriseOptions.DBLab.InstanceLimit)
 	}
 
-	for name, dbLab := range a.mappingCfg.DBLabInstances {
+	for name, dbLab := range a.Config.ChannelMapping.DBLabInstances {
 		if err := a.validateDBLabInstance(dbLab); err != nil {
 			return errors.Wrapf(err, "failed to init %q", name)
 		}
@@ -126,7 +124,7 @@ func (a *App) validateDBLabInstance(instance config.DBLabInstance) error {
 func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 	assistants := []connection.Assistant{}
 
-	for workspaceType, workspaceList := range a.mappingCfg.CommunicationTypes {
+	for workspaceType, workspaceList := range a.Config.ChannelMapping.CommunicationTypes {
 		for _, workspace := range workspaceList {
 			assist, err := a.getAssistant(workspaceType, workspace)
 			if err != nil {

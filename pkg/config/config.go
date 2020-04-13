@@ -7,31 +7,29 @@ package config
 
 import (
 	"io/ioutil"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
+	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
 )
 
 // Config defines an App configuration.
 type Config struct {
-	App                      App
-	Version                  string
-	Port                     uint
-	Explain                  pgexplain.ExplainConfig
-	Quota                    Quota
-	MinNotifyDurationMinutes uint
-	Platform                 Platform
-	ChannelMapping           *ChannelMapping
+	App               App `yaml:"app"`
+	Explain           pgexplain.ExplainConfig
+	Platform          Platform        `yaml:"platform"`
+	ChannelMapping    *ChannelMapping `yaml:"channelMapping"`
+	EnterpriseOptions definition.EnterpriseOptions
 }
 
 // App defines a general application configuration.
 type App struct {
-	Version                  string
-	Port                     uint
-	AuditEnabled             bool
-	MinNotifyDurationMinutes uint
-	MaxDBLabInstances        uint
+	Version           string
+	Port              uint          `env:"SERVER_PORT" env-default:"3001"`
+	MinNotifyDuration time.Duration `env:"MIN_NOTIFY_DURATION" env-default:"60s"`
+	Debug             bool          `env:"JOE_DEBUG"`
 }
 
 // Quota contains quota configuration parameters.
@@ -42,10 +40,10 @@ type Quota struct {
 
 // Platform describes configuration parameters of a Postgres.ai platform.
 type Platform struct {
-	URL            string
-	Token          string
-	Project        string
-	HistoryEnabled bool
+	URL            string `env:"PLATFORM_URL" env-default:"https://postgres.ai/api/general"`
+	Token          string `env:"PLATFORM_TOKEN"`
+	Project        string `env:"PLATFORM_PROJECT"`
+	HistoryEnabled bool   `env:"HISTORY_ENABLED"`
 }
 
 // ChannelMapping contains configuration parameters of communication types and Database Labs.
@@ -56,15 +54,15 @@ type ChannelMapping struct {
 
 // DBLabInstance contains Database Lab config.
 type DBLabInstance struct {
-	URL   string `yaml:"url"`
-	Token string `yaml:"token"`
+	URL   string
+	Token string
 }
 
 // Workspace defines a connection space.
 type Workspace struct {
-	Name        string      `yaml:"name"`
-	Credentials Credentials `yaml:"credentials"`
-	Channels    []Channel   `yaml:"channels"`
+	Name        string
+	Credentials Credentials
+	Channels    []Channel
 }
 
 // Credentials defines connection space credentials.
