@@ -25,32 +25,55 @@ platform:
   historyEnabled: false
 
 # Channel Mapping section.
-# Feel free to choose any name for Database Lab instances from the `dblabServers` section those are just aliases.
 channelMapping:
+  # Available communication types (Web UI, Slack, etc.)
   communicationTypes:
-    slack:
-      - name: Workspace
-        credentials:
-          accessToken: access_token
-          signingSecret: secret_signing
-        channels:
-          - channelID: channelID1
-            dblabServer: prod1
-            dblabParams:
-              dbname: postgres
-              sslmode: disable
+    # Web UI communication type configuration.
     webui:
+      # Web UI name. Feel free to choose any name.
       - name: WebUI
         credentials:
+          # WEB UI signing secret.
           signingSecret: secret_signing
+
         channels:
-          - channelID: channelID1
+          # Web UI channel ID. Feel free to choose any name.
+          - channelID: ProductionDB
+
+            # Database Lab alias from the dblabServers section.
             dblabServer: prod1
+
+            # Database Lab clone parameters.
             dblabParams:
               dbname: postgres
               sslmode: disable
 
+    # Slack communication type configuration.
+    slack:
+      # Workspace name. Feel free to choose any name.
+      - name: Workspace
+        credentials:
+          # Bot User OAuth Access Token ("xoxb-TOKEN").
+          accessToken: access_token
+
+          # Slack App Signing Secret.
+          signingSecret: secret_signing
+
+        channels:
+          # Slack channel ID.
+          - channelID: CXXXXXXX0
+
+            # Database Lab alias from the dblabServers section.
+            dblabServer: prod1
+
+            # Database Lab clone parameters.
+            dblabParams:
+              dbname: postgres
+              sslmode: disable
+
+  # Running Database Lab instances.
   dblabServers:
+    # Database Lab instance alias.
     prod1:
       url: "https://127.0.0.1:3000"
       token: "secret_token"
