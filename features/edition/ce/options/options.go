@@ -24,10 +24,10 @@ const (
 type Extra struct {
 }
 
-var _ definition.FlagProvider = (*Extra)(nil)
+var _ definition.OptionProvider = (*Extra)(nil)
 
-// ToOpts returns the EnterpriseOptions struct.
-func (e *Extra) ToOpts() definition.EnterpriseOptions {
+// GetEnterpriseOptions returns the EnterpriseOptions struct with default options.
+func (e *Extra) GetEnterpriseOptions(_ string) (definition.EnterpriseOptions, error) {
 	return definition.EnterpriseOptions{
 		Quota: definition.Quota{
 			Limit:    defaultQuotaLimit,
@@ -39,5 +39,5 @@ func (e *Extra) ToOpts() definition.EnterpriseOptions {
 		DBLab: definition.DBLab{
 			InstanceLimit: defaultDBLabLimit,
 		},
-	}
+	}, nil
 }

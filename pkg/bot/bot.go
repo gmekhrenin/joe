@@ -32,7 +32,7 @@ const InactiveCloneCheckInterval = time.Minute
 
 // App defines a application struct.
 type App struct {
-	Config      config.Config
+	Config      *config.Config
 	featurePack *features.Pack
 
 	dblabMu        *sync.RWMutex
@@ -40,7 +40,7 @@ type App struct {
 }
 
 // Creates a new application.
-func NewApp(cfg config.Config, enterprise *features.Pack) *App {
+func NewApp(cfg *config.Config, enterprise *features.Pack) *App {
 	bot := App{
 		Config:         cfg,
 		dblabMu:        &sync.RWMutex{},
@@ -85,10 +85,10 @@ func (a *App) RunServer(ctx context.Context) error {
 }
 
 func (a *App) initDBLabInstances() error {
-	if len(a.Config.ChannelMapping.DBLabInstances) > int(a.Config.EnterpriseOptions.DBLab.InstanceLimit) {
+	if len(a.Config.ChannelMapping.DBLabInstances) > int(a.Config.Enterprise.DBLab.InstanceLimit) {
 		return errors.Errorf("available limit exceeded, the maximum amount is %d. "+
 			"Please correct the `dblabs` section in the configuration file or upgrade your plan to Enterprise Edition",
-			a.Config.EnterpriseOptions.DBLab.InstanceLimit)
+			a.Config.Enterprise.DBLab.InstanceLimit)
 	}
 
 	for name, dbLab := range a.Config.ChannelMapping.DBLabInstances {
@@ -147,10 +147,10 @@ func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Wor
 
 	switch communicationTypeType {
 	case slack.CommunicationType:
-		return slack.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.featurePack), nil
+		return slack.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack), nil
 
 	case webui.CommunicationType:
-		return webui.NewAssistant(&workspaceCfg.Credentials, &a.Config, handlerPrefix, a.featurePack), nil
+		return webui.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack), nil
 
 	default:
 		return nil, errors.New("unknown workspace type given")

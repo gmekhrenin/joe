@@ -106,14 +106,14 @@ func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) (*msgpr
 
 	messenger := NewMessenger(platformClient)
 	userInformer := NewUserInformer()
-	userManager := usermanager.NewUserManager(userInformer, a.appCfg.EnterpriseOptions.Quota)
+	userManager := usermanager.NewUserManager(userInformer, a.appCfg.Enterprise.Quota)
 
 	processingCfg := msgproc.ProcessingConfig{
 		App:      a.appCfg.App,
 		Platform: a.appCfg.Platform,
 		Explain:  a.appCfg.Explain,
 		DBLab:    dbLabInstance.Config(),
-		EntOpts:  a.appCfg.EnterpriseOptions,
+		EntOpts:  a.appCfg.Enterprise,
 	}
 
 	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, platformClient,

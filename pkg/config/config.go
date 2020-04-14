@@ -6,10 +6,7 @@
 package config
 
 import (
-	"io/ioutil"
 	"time"
-
-	"gopkg.in/yaml.v2"
 
 	"gitlab.com/postgres-ai/joe/features/definition"
 	"gitlab.com/postgres-ai/joe/pkg/pgexplain"
@@ -17,11 +14,11 @@ import (
 
 // Config defines an App configuration.
 type Config struct {
-	App               App `yaml:"app"`
-	Explain           pgexplain.ExplainConfig
-	Platform          Platform        `yaml:"platform"`
-	ChannelMapping    *ChannelMapping `yaml:"channelMapping"`
-	EnterpriseOptions definition.EnterpriseOptions
+	App            App                          `yaml:"app"`
+	Platform       Platform                     `yaml:"platform"`
+	ChannelMapping *ChannelMapping              `yaml:"channelMapping"`
+	Explain        pgexplain.ExplainConfig      `yaml:"-"`
+	Enterprise     definition.EnterpriseOptions `yaml:"-"`
 }
 
 // App defines a general application configuration.
@@ -30,12 +27,6 @@ type App struct {
 	Port              uint          `env:"SERVER_PORT" env-default:"3001"`
 	MinNotifyDuration time.Duration `env:"MIN_NOTIFY_DURATION" env-default:"60s"`
 	Debug             bool          `env:"JOE_DEBUG"`
-}
-
-// Quota contains quota configuration parameters.
-type Quota struct {
-	Limit    uint
-	Interval uint // Seconds.
 }
 
 // Platform describes configuration parameters of a Postgres.ai platform.
@@ -82,20 +73,4 @@ type Channel struct {
 type DBLabParams struct {
 	DBName  string `yaml:"dbname" json:"-"`
 	SSLMode string `yaml:"sslmode" json:"-"`
-}
-
-// Load loads configuration from file.
-func Load(filename string) (*ChannelMapping, error) {
-	//nolint:gosec
-	bytes, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	var config ChannelMapping
-	if err = yaml.Unmarshal(bytes, &config); err != nil {
-		return nil, err
-	}
-
-	return &config, nil
 }

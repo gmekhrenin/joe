@@ -37,3 +37,14 @@ channelMapping:
     prod1:
       url: "https://127.0.0.1:3000"
       token: "secret_token"
+
+# Enterprise options (changing these options you confirm that you have active
+# subscription to Postgres.ai Platform Enterprise Edition https://postgres.ai).
+enterprise:
+  quota:
+    limit: 10
+    interval: 60
+  audit:
+    enabled: false
+  dblab:
+    instanceLimit: 1
