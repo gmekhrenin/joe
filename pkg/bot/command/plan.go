@@ -154,7 +154,7 @@ func (cmd *PlanCmd) runQueryWithoutHypo(ctx context.Context) (string, error) {
 	}
 	defer rows.Close()
 
-	var explainResultWithoutHypo strings.Builder
+	explainResultWithoutHypo := strings.Builder{}
 
 	for rows.Next() {
 		var s string
@@ -163,6 +163,7 @@ func (cmd *PlanCmd) runQueryWithoutHypo(ctx context.Context) (string, error) {
 		}
 
 		explainResultWithoutHypo.WriteString(s)
+		explainResultWithoutHypo.WriteString("\n")
 	}
 
 	if err := rows.Err(); err != nil {
