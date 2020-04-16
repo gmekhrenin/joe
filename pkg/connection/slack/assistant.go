@@ -179,8 +179,15 @@ func (a *Assistant) lenMessageProcessor() int {
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"": a.handleEvent,
+		"health": a.healthCheck,
+		"":       a.handleEvent,
 	}
+}
+
+func (a *Assistant) healthCheck(w http.ResponseWriter, r *http.Request) {
+	log.Msg("Request received:", html.EscapeString(r.URL.Path))
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {

@@ -160,10 +160,17 @@ func (a *Assistant) lenMessageProcessor() int {
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
+		"health":   a.healthCheck,
 		"verify":   a.verificationHandler,
 		"channels": a.channelsHandler,
 		"command":  a.commandHandler,
 	}
+}
+
+func (a *Assistant) healthCheck(w http.ResponseWriter, r *http.Request) {
+	log.Msg("Request received:", html.EscapeString(r.URL.Path))
+
+	w.WriteHeader(http.StatusOK)
 }
 
 type challengeResponse struct {
