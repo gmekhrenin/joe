@@ -69,7 +69,7 @@ channelMapping:
 
         channels:
           # Slack channel ID. In Slack app, right-click on the channel name,
-          # and choose "Additional options < Copy link". From that link, we
+          # and choose "Additional options > Copy link". From that link, we
           # need the last part consisting of 9 letters starting with "C".
           - channelID: CXXXXXXXX
 
