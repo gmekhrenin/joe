@@ -83,6 +83,8 @@ func (a *Assistant) Init() error {
 		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), verifier.Handler(handleFunc))
 	}
 
+	http.HandleFunc(fmt.Sprintf("%s/health", a.prefix), a.healthCheck)
+
 	return nil
 }
 
@@ -160,7 +162,6 @@ func (a *Assistant) lenMessageProcessor() int {
 
 func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
-		"health":   a.healthCheck,
 		"verify":   a.verificationHandler,
 		"channels": a.channelsHandler,
 		"command":  a.commandHandler,
