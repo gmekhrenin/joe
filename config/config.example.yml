@@ -85,7 +85,7 @@ channelMapping:
 
   # Running Database Lab instances.
   dblabServers:
-    # Database Lab instance alias and parameters to connect to the API
+    # Database Lab instance alias and parameters to connect to the API.
     prod1:
       url: "https://dblab.domain.com"
       token: "secret_token"
