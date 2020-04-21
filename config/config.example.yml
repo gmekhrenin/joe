@@ -53,7 +53,7 @@ channelMapping:
             # each time a new clone is created.
             dblabParams:
               dbname: postgres
-              sslmode: disable
+              sslmode: prefer
 
     # Slack communication type configuration.
     slack:
@@ -81,7 +81,7 @@ channelMapping:
             # each time a new clone is created.
             dblabParams:
               dbname: postgres
-              sslmode: disable
+              sslmode: prefer
 
   # Running Database Lab instances.
   dblabServers:
