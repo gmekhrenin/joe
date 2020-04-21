@@ -130,8 +130,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 	}
 
 	if clone.DB == nil {
-		errMessage := "failed to get connection params"
-		return errors.New(errMessage)
+		return errors.New("failed to get connection params")
 	}
 
 	dblabClone := s.buildDBLabCloneConn(clone.DB)
@@ -216,7 +215,7 @@ func (s *ProcessingService) createDBLabClone(ctx context.Context, user *usermana
 
 	// To get an accessible address in case running the assistant inside a container.
 	if clone.DB.Host == "localhost" || clone.DB.Host == "127.0.0.1" {
-		clone.DB.Host = s.DBLab.URL("").Host
+		clone.DB.Host = s.DBLab.URL("").Hostname()
 	}
 
 	return clone, nil
