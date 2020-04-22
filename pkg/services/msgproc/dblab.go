@@ -106,7 +106,7 @@ func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.Us
 
 	defer func() {
 		if err != nil {
-			if failErr := s.messenger.Fail(sMsg, err.Error()); err != nil {
+			if failErr := s.messenger.Fail(sMsg, err.Error()); failErr != nil {
 				log.Err(failErr)
 			}
 		}
