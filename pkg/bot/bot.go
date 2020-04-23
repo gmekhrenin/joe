@@ -205,15 +205,12 @@ func (a *App) healthCheck(w http.ResponseWriter, r *http.Request) {
 		CommunicationTypes: communicationTypes,
 	}
 
-	responseData, err := json.Marshal(healthResponse)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
+	if err := json.NewEncoder(w).Encode(healthResponse); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Err(err)
 
 		return
 	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(responseData) // nolint
 }
