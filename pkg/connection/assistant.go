@@ -20,7 +20,7 @@ type Assistant interface {
 	CheckIdleSessions(context.Context)
 
 	// AddDBLabInstanceForChannel adds a new Database Lab instance to communication via the assistant.
-	AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) error
+	AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance)
 }
 
 // MessageProcessor defines the interface of a message processor.

@@ -68,9 +68,6 @@ channelMapping:
           # Bot User OAuth Access Token ("xoxb-TOKEN").
           accessToken: access_token
 
-          # Slack App Signing Secret.
-          signingSecret: secret_signing
-
         channels:
           # Slack channel ID. In Slack app, right-click on the channel name,
           # and choose "Additional options > Copy link". From that link, we

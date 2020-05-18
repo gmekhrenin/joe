@@ -13,14 +13,12 @@ import (
 
 // UserInformer provides a service for getting user info.
 type UserInformer struct {
-	//api *slack.Client
 	rtm *slack.RTM
 }
 
 // NewUserInformer creates a new UserInformer service.
 func NewUserInformer(rtm *slack.RTM) *UserInformer {
 	return &UserInformer{
-		//api: api,
 		rtm: rtm,
 	}
 }

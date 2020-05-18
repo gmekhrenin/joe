@@ -159,7 +159,7 @@ func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Wor
 
 	case webui.CommunicationType:
 		handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
-		return webui.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack), nil
+		return webui.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack)
 
 	default:
 		return nil, errors.New("unknown workspace type given")
@@ -178,10 +178,7 @@ func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace conf
 
 		a.dblabMu.RUnlock()
 		dbLabInstance.SetCfg(channel.DBLabParams)
-
-		if err := assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance); err != nil {
-			return errors.Wrap(err, "failed to add a DBLab instance")
-		}
+		assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance)
 	}
 
 	return nil
