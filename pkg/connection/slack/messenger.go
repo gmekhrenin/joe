@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
@@ -49,14 +49,16 @@ var supportedSubtypes = []string{
 
 // Messenger provides a communication via Slack API.
 type Messenger struct {
-	api    *slack.Client
+	//api    *slack.Client
+	rtm    *slack.RTM
 	config *SlackConfig
 }
 
 // NewMessenger creates a new Slack messenger service.
-func NewMessenger(api *slack.Client, cfg *SlackConfig) *Messenger {
+func NewMessenger(rtm *slack.RTM, cfg *SlackConfig) *Messenger {
 	return &Messenger{
-		api:    api,
+		//api:    api,
+		rtm:    rtm,
 		config: cfg,
 	}
 }
@@ -65,7 +67,7 @@ func NewMessenger(api *slack.Client, cfg *SlackConfig) *Messenger {
 func (m *Messenger) Publish(message *models.Message) error {
 	switch message.MessageType {
 	case models.MessageTypeDefault:
-		_, timestamp, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false))
+		_, timestamp, err := m.rtm.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false))
 		if err != nil {
 			return errors.Wrap(err, "failed to post a message")
 		}
@@ -73,14 +75,14 @@ func (m *Messenger) Publish(message *models.Message) error {
 		message.MessageID = timestamp
 
 	case models.MessageTypeThread:
-		_, _, err := m.api.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false),
+		_, _, err := m.rtm.PostMessage(message.ChannelID, slack.MsgOptionText(message.Text, false),
 			slack.MsgOptionTS(message.ThreadID))
 		if err != nil {
 			return errors.Wrap(err, "failed to post a thread message")
 		}
 
 	case models.MessageTypeEphemeral:
-		timestamp, err := m.api.PostEphemeral(message.ChannelID, message.UserID, slack.MsgOptionText(message.Text, false))
+		timestamp, err := m.rtm.PostEphemeral(message.ChannelID, message.UserID, slack.MsgOptionText(message.Text, false))
 		if err != nil {
 			return errors.Wrap(err, "failed to post an ephemeral message")
 		}
@@ -100,7 +102,7 @@ func (m *Messenger) UpdateText(message *models.Message) error {
 		return errors.New(errorNotPublished)
 	}
 
-	_, timestamp, _, err := m.api.UpdateMessage(message.ChannelID, message.MessageID, slack.MsgOptionText(message.Text, false))
+	_, timestamp, _, err := m.rtm.UpdateMessage(message.ChannelID, message.MessageID, slack.MsgOptionText(message.Text, false))
 	if err != nil {
 		return errors.Wrap(err, "failed to update a message")
 	}
@@ -128,7 +130,7 @@ func (m *Messenger) UpdateStatus(message *models.Message, status models.MessageS
 	msgRef := slack.NewRefToMessage(message.ChannelID, message.MessageID)
 
 	// Add new reaction.
-	if err := m.api.AddReaction(reaction, msgRef); err != nil {
+	if err := m.rtm.AddReaction(reaction, msgRef); err != nil {
 		message.SetStatus("")
 		return err
 	}
@@ -138,7 +140,7 @@ func (m *Messenger) UpdateStatus(message *models.Message, status models.MessageS
 
 	// Remove previous reaction.
 	if oldReaction, ok := statusMapping[message.Status]; ok {
-		if err := m.api.RemoveReaction(oldReaction, msgRef); err != nil {
+		if err := m.rtm.RemoveReaction(oldReaction, msgRef); err != nil {
 			return err
 		}
 	}
@@ -216,7 +218,7 @@ func (m *Messenger) uploadFile(title string, content string, channel string, ts 
 		ThreadTimestamp: ts,
 	}
 
-	file, err := m.api.UploadFile(params)
+	file, err := m.rtm.UploadFile(params)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to upload a file")
 	}

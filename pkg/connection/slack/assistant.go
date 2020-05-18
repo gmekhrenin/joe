@@ -8,18 +8,18 @@ package slack
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"html"
 	"io/ioutil"
+	slog "log"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
 
-	"github.com/nlopes/slack"
-	"github.com/nlopes/slack/slackevents"
 	"github.com/pkg/errors"
+	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/slackevents"
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/features"
@@ -91,9 +91,12 @@ func (a *Assistant) Init() error {
 		return errors.New("no message processor set")
 	}
 
-	for path, handleFunc := range a.handlers() {
-		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
-	}
+	//ctx := context.Background()
+	//a.handleRTM(ctx)
+
+	//for path, handleFunc := range a.handlers() {
+	//	http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
+	//}
 
 	return nil
 }
@@ -116,10 +119,18 @@ func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) (*msgpr
 		SigningSecret: a.credentialsCfg.SigningSecret,
 	}
 
-	chatAPI := slack.New(slackCfg.AccessToken)
+	chatAPI := slack.New(slackCfg.AccessToken,
+		slack.OptionDebug(true),
+		slack.OptionLog(slog.New(os.Stdout, "slack-bot: ", slog.Lshortfile|slog.LstdFlags)),
+	)
 
-	messenger := NewMessenger(chatAPI, slackCfg)
-	userInformer := NewUserInformer(chatAPI)
+	rtm := chatAPI.NewRTM()
+	go rtm.ManageConnection()
+
+	go a.handleRTM(context.Background(), rtm.IncomingEvents)
+
+	messenger := NewMessenger(rtm, slackCfg)
+	userInformer := NewUserInformer(rtm)
 	userManager := usermanager.NewUserManager(userInformer, a.appCfg.Enterprise.Quota)
 
 	processingCfg := msgproc.ProcessingConfig{
@@ -137,6 +148,49 @@ func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) (*msgpr
 
 	return msgproc.NewProcessingService(messenger, MessageValidator{}, dbLabInstance.Client(), userManager, platformManager,
 		processingCfg, a.featurePack), nil
+}
+
+func (a *Assistant) handleRTM(ctx context.Context, incomingEvents chan slack.RTMEvent) {
+	for msg := range incomingEvents {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		switch ev := msg.Data.(type) {
+		case *slack.MessageEvent:
+			log.Dbg("Event type: Message")
+
+			if ev.Msg.SubType != "" {
+				continue // We're only handling normal messages.
+			}
+
+			if ev.BotID != "" {
+				// Skip messages sent by bots.
+				continue
+			}
+
+			msgProcessor, err := a.getProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				continue
+			}
+
+			msg := a.messageEventToIncomingMessage(ev)
+			//fmt.Printf("Message: %v\n msgProc: %v\n", msg, msgProcessor)
+			msgProcessor.ProcessMessageEvent(context.TODO(), msg)
+
+		case *slack.DisconnectedEvent:
+			fmt.Printf("Disconnect event: %v\n", ev.Cause.Error())
+
+		case *slack.LatencyReport:
+			fmt.Printf("Current latency: %v\n", ev.Value)
+
+		default:
+			log.Dbg("Event filtered: Inner event type not supported")
+		}
+	}
 }
 
 // addProcessingService adds a message processor for a specific channel.
@@ -177,13 +231,13 @@ func (a *Assistant) lenMessageProcessor() int {
 	return len(a.msgProcessors)
 }
 
-func (a *Assistant) handlers() map[string]http.HandlerFunc {
+/*func (a *Assistant) handlers() map[string]http.HandlerFunc {
 	return map[string]http.HandlerFunc{
 		"": a.handleEvent,
 	}
-}
+}*/
 
-func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
+/*func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	log.Msg("Request received:", html.EscapeString(r.URL.Path))
 
 	// TODO(anatoly): Respond time according to Slack API timeouts policy.
@@ -276,7 +330,7 @@ func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
 	default:
 		log.Dbg("Event filtered: Event type not supported")
 	}
-}
+}*/
 
 // appMentionEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
 func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) models.IncomingMessage {
@@ -292,17 +346,17 @@ func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMenti
 }
 
 // messageEventToIncomingMessage converts a Slack message event to the standard incoming message.
-func (a *Assistant) messageEventToIncomingMessage(event *slackevents.MessageEvent) models.IncomingMessage {
+func (a *Assistant) messageEventToIncomingMessage(event *slack.MessageEvent) models.IncomingMessage {
 	message := unfurlLinks(event.Text)
 
 	inputEvent := models.IncomingMessage{
 		SubType:     event.SubType,
 		Text:        message,
 		ChannelID:   event.Channel,
-		ChannelType: event.ChannelType,
+		ChannelType: event.Type,
 		UserID:      event.User,
-		Timestamp:   event.TimeStamp,
-		ThreadID:    event.ThreadTimeStamp,
+		Timestamp:   event.Timestamp,
+		ThreadID:    event.ThreadTimestamp,
 	}
 
 	// Skip messages sent by bots.

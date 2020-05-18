@@ -5,7 +5,7 @@
 package slack
 
 import (
-	"github.com/nlopes/slack"
+	"github.com/slack-go/slack"
 	"github.com/pkg/errors"
 
 	"gitlab.com/postgres-ai/joe/pkg/models"
@@ -13,19 +13,21 @@ import (
 
 // UserInformer provides a service for getting user info.
 type UserInformer struct {
-	api *slack.Client
+	//api *slack.Client
+	rtm *slack.RTM
 }
 
 // NewUserInformer creates a new UserInformer service.
-func NewUserInformer(api *slack.Client) *UserInformer {
+func NewUserInformer(rtm *slack.RTM) *UserInformer {
 	return &UserInformer{
-		api: api,
+		//api: api,
+		rtm: rtm,
 	}
 }
 
 // GetUserInfo retrieves user info by ID.
 func (m *UserInformer) GetUserInfo(userID string) (models.UserInfo, error) {
-	slackUser, err := m.api.GetUserInfo(userID)
+	slackUser, err := m.rtm.GetUserInfo(userID)
 	if err != nil {
 		return models.UserInfo{}, errors.Wrap(err, "failed to get user info")
 	}
