@@ -72,7 +72,7 @@ func (a *App) RunServer(ctx context.Context) error {
 	}
 
 	for _, assistantSvc := range assistants {
-		if err := assistantSvc.Init(); err != nil {
+		if err := assistantSvc.Init(ctx); err != nil {
 			return errors.Wrap(err, "failed to init an assistant")
 		}
 
@@ -153,13 +153,12 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 }
 
 func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
-	handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
-
 	switch communicationTypeType {
 	case slack.CommunicationType:
-		return slack.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack), nil
+		return slack.NewAssistant(&workspaceCfg.Credentials, a.Config, a.featurePack)
 
 	case webui.CommunicationType:
+		handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
 		return webui.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack), nil
 
 	default:

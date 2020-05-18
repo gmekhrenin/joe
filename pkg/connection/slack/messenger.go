@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/slack-go/slack"
 	"github.com/pkg/errors"
+	"github.com/slack-go/slack"
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 

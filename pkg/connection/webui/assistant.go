@@ -65,7 +65,7 @@ func (a *Assistant) validateCredentials() error {
 }
 
 // Init registers assistant handlers.
-func (a *Assistant) Init() error {
+func (a *Assistant) Init(_ context.Context) error {
 	log.Dbg("URL-path prefix: ", a.prefix)
 
 	if err := a.validateCredentials(); err != nil {
