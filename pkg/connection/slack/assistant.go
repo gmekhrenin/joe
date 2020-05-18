@@ -16,8 +16,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/slack-go/slack"
-	"github.com/slack-go/slack/slackevents"
-
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
 	"gitlab.com/postgres-ai/joe/features"
@@ -172,13 +170,25 @@ func (a *Assistant) handleRTM(ctx context.Context, incomingEvents chan slack.RTM
 			}
 
 			msg := a.messageEventToIncomingMessage(ev)
-			msgProcessor.ProcessMessageEvent(context.TODO(), msg)
+			go msgProcessor.ProcessMessageEvent(ctx, msg)
+
+		case *slack.DesktopNotificationEvent:
+			log.Dbg(fmt.Sprintf("Desktop Notification: %v\n", ev))
+
+			msgProcessor, err := a.getProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				return
+			}
+
+			msg := a.appMentionEventToIncomingMessage(ev)
+			msgProcessor.ProcessAppMentionEvent(msg)
 
 		case *slack.DisconnectedEvent:
-			fmt.Printf("Disconnect event: %v\n", ev.Cause.Error())
+			log.Dbg(fmt.Sprintf("Disconnect event: %v\n", ev.Cause.Error()))
 
 		case *slack.LatencyReport:
-			fmt.Printf("Current latency: %v\n", ev.Value)
+			log.Dbg(fmt.Sprintf("Current latency: %v\n", ev.Value))
 
 		default:
 			log.Dbg(fmt.Sprintf("Event filtered: skip %q event type", msg.Type))
@@ -326,13 +336,11 @@ func (a *Assistant) lenMessageProcessor() int {
 }*/
 
 // appMentionEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
-func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) models.IncomingMessage {
+func (a *Assistant) appMentionEventToIncomingMessage(event *slack.DesktopNotificationEvent) models.IncomingMessage {
 	inputEvent := models.IncomingMessage{
-		Text:      event.Text,
+		Text:      event.Content,
 		ChannelID: event.Channel,
-		UserID:    event.User,
-		Timestamp: event.TimeStamp,
-		ThreadID:  event.ThreadTimeStamp,
+		Timestamp: event.Timestamp,
 	}
 
 	return inputEvent
