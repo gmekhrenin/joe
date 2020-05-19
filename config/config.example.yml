@@ -2,12 +2,13 @@
 # Copy this file to: ./config/config.yml
 
 app:
-  # HTTP server IP address or host.
+  # HTTP server IP address or host. Used only for Web UI and Slack communication types.
   # Default: "127.0.0.1" (only local connections).
   # Use empty string to listen all network interfaces.
   host: "127.0.0.1"
 
-  # HTTP server port. Default: 2400.
+  # HTTP server port. Used only for Web UI and Slack communication types.
+  # Default: 2400.
   port: 2400
 
   # Minimal duration of long query processing used for notifications.
@@ -47,7 +48,7 @@ channelMapping:
       # Secret token used to communicate with Database Lab API
       token: "secret_token"
 
-  # Available communication types ("webui", "slack", etc.)
+  # Available communication types ("webui", "slack", "slackrtm", etc.)
   communicationTypes:
     # Communication type: Web UI (part of Postgres.ai Platform).
     webui:
