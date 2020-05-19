@@ -82,7 +82,7 @@ channelMapping:
               # used in a clone's pg_hba.conf. See https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
               sslmode: prefer
 
-    # Communication type: Slack.
+    # Communication type: Slack Events API.
     slack:
       # Workspace name. Feel free to choose any name, it is just an alias.
       - name: Workspace
