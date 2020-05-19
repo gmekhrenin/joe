@@ -50,11 +50,16 @@ var supportedSubtypes = []string{
 // Messenger provides a communication via Slack API.
 type Messenger struct {
 	api    *slack.Client
-	config *Config
+	config *MessengerConfig
+}
+
+// MessengerConfig defines a slack configuration parameters.
+type MessengerConfig struct {
+	AccessToken string
 }
 
 // NewMessenger creates a new Slack messenger service.
-func NewMessenger(api *slack.Client, cfg *Config) *Messenger {
+func NewMessenger(api *slack.Client, cfg *MessengerConfig) *Messenger {
 	return &Messenger{
 		api:    api,
 		config: cfg,

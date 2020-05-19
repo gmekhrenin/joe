@@ -49,30 +49,17 @@ type Assistant struct {
 	prefix         string
 	appCfg         *config.Config
 	featurePack    *features.Pack
-	//rtm             *slack.API
 	messenger      *Messenger
 	userManager    *usermanager.UserManager
 	platformClient *platform.Client
-}
-
-// Config defines a slack configuration parameters.
-type Config struct {
-	AccessToken   string
-	SigningSecret string
 }
 
 // NewAssistant returns a new assistant service.
 func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix string, pack *features.Pack) (*Assistant, error) {
 	prefix := fmt.Sprintf("/%s", strings.Trim(handlerPrefix, "/"))
 
-	slackCfg := &Config{
-		AccessToken:   cfg.AccessToken,
-		SigningSecret: cfg.SigningSecret,
-	}
-
-	chatAPI := slack.New(slackCfg.AccessToken)
-
-	messenger := NewMessenger(chatAPI, slackCfg)
+	chatAPI := slack.New(cfg.AccessToken)
+	messenger := NewMessenger(chatAPI, &MessengerConfig{AccessToken: cfg.AccessToken})
 	userInformer := NewUserInformer(chatAPI)
 	userManager := usermanager.NewUserManager(userInformer, appCfg.Enterprise.Quota)
 
@@ -122,20 +109,21 @@ func (a *Assistant) Init(_ context.Context) error {
 	return nil
 }
 
-// AddDBLabInstanceForChannel sets a message processor for a specific channel.
-func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) {
-	messageProcessor := a.buildMessageProcessor(dbLabInstance)
+// AddChannel sets a message processor for a specific channel.
+func (a *Assistant) AddChannel(channelID, project string, dbLabInstance *dblab.Instance) {
+	messageProcessor := a.buildMessageProcessor(project, dbLabInstance)
 
 	a.addProcessingService(channelID, messageProcessor)
 }
 
-func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
+func (a *Assistant) buildMessageProcessor(project string, dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
 	processingCfg := msgproc.ProcessingConfig{
 		App:      a.appCfg.App,
 		Platform: a.appCfg.Platform,
 		Explain:  a.appCfg.Explain,
 		DBLab:    dbLabInstance.Config(),
 		EntOpts:  a.appCfg.Enterprise,
+		Project:  project,
 	}
 
 	return msgproc.NewProcessingService(a.messenger, MessageValidator{}, dbLabInstance.Client(), a.userManager, a.platformClient,

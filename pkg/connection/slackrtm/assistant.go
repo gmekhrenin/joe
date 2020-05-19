@@ -112,20 +112,21 @@ func (a *Assistant) Init(ctx context.Context) error {
 	return nil
 }
 
-// AddDBLabInstanceForChannel sets a message processor for a specific channel.
-func (a *Assistant) AddDBLabInstanceForChannel(channelID string, dbLabInstance *dblab.Instance) {
-	messageProcessor := a.buildMessageProcessor(dbLabInstance)
+// AddChannel sets a message processor for a specific channel.
+func (a *Assistant) AddChannel(channelID, project string, dbLabInstance *dblab.Instance) {
+	messageProcessor := a.buildMessageProcessor(project, dbLabInstance)
 
 	a.addProcessingService(channelID, messageProcessor)
 }
 
-func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
+func (a *Assistant) buildMessageProcessor(project string, dbLabInstance *dblab.Instance) *msgproc.ProcessingService {
 	processingCfg := msgproc.ProcessingConfig{
 		App:      a.appCfg.App,
 		Platform: a.appCfg.Platform,
 		Explain:  a.appCfg.Explain,
 		DBLab:    dbLabInstance.Config(),
 		EntOpts:  a.appCfg.Enterprise,
+		Project:  project,
 	}
 
 	return msgproc.NewProcessingService(a.messenger, MessageValidator{}, dbLabInstance.Client(), a.userManager, a.platformManager,

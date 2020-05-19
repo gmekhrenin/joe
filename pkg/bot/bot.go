@@ -142,7 +142,7 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
 
-			if err := a.setupDBLabInstances(assist, workspace); err != nil {
+			if err := a.setupChannels(assist, workspace); err != nil {
 				return nil, errors.Wrap(err, "failed to register workspace assistants")
 			}
 
@@ -171,7 +171,7 @@ func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Wor
 	}
 }
 
-func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace config.Workspace) error {
+func (a *App) setupChannels(assistant connection.Assistant, workspace config.Workspace) error {
 	for _, channel := range workspace.Channels {
 		a.dblabMu.RLock()
 
@@ -183,7 +183,7 @@ func (a *App) setupDBLabInstances(assistant connection.Assistant, workspace conf
 
 		a.dblabMu.RUnlock()
 		dbLabInstance.SetCfg(channel.DBLabParams)
-		assistant.AddDBLabInstanceForChannel(channel.ChannelID, dbLabInstance)
+		assistant.AddChannel(channel.ChannelID, channel.Project, dbLabInstance)
 	}
 
 	return nil

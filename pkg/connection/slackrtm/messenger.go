@@ -247,7 +247,8 @@ func (m *Messenger) DownloadArtifact(privateURL string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot download snippet")
 	}
-	defer resp.Body.Close()
+
+	defer func() { _ = resp.Body.Close() }()
 
 	snippet, err := ioutil.ReadAll(resp.Body)
 	if err != nil {

@@ -53,7 +53,6 @@ type Command struct {
 type Client struct {
 	url         *url.URL
 	accessToken string
-	project     string
 	client      *http.Client
 }
 
@@ -69,7 +68,6 @@ func NewClient(platformCfg config.Platform) (*Client, error) {
 
 	p := Client{
 		url:         u,
-		project:     platformCfg.Project,
 		accessToken: platformCfg.Token,
 		client: &http.Client{
 			Transport: &http.Transport{},
@@ -147,8 +145,6 @@ func (p *Client) PostCommand(ctx context.Context, command *Command) (PostCommand
 // CreatePlatformSession makes an HTTP request to create a new Platform session.
 func (p *Client) CreatePlatformSession(ctx context.Context, session Session) (string, error) {
 	log.Dbg("Platform API: create session")
-
-	session.ProjectName = p.project
 
 	respData := CreateSessionResponse{}
 
