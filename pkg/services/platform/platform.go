@@ -59,6 +59,7 @@ type Client struct {
 
 // NewClient creates a new Platform API client.
 func NewClient(platformCfg config.Platform) (*Client, error) {
+	// TODO (akartasov): validate configuration on the app start.
 	u, err := url.Parse(platformCfg.URL)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse a platform host")

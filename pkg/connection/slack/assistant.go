@@ -6,14 +6,20 @@
 package slack
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"html"
+	"io/ioutil"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/slackevents"
 
 	"gitlab.com/postgres-ai/database-lab/pkg/log"
 
@@ -37,66 +43,69 @@ const CommunicationType = "slack"
 
 // Assistant provides a service for interaction with a communication channel.
 type Assistant struct {
-	credentialsCfg  *config.Credentials
-	procMu          sync.RWMutex
-	msgProcessors   map[string]connection.MessageProcessor
-	appCfg          *config.Config
-	featurePack     *features.Pack
-	rtm             *slack.RTM
-	messenger       *Messenger
-	userManager     *usermanager.UserManager
-	platformManager *platform.Client
+	credentialsCfg *config.Credentials
+	procMu         sync.RWMutex
+	msgProcessors  map[string]connection.MessageProcessor
+	prefix         string
+	appCfg         *config.Config
+	featurePack    *features.Pack
+	//rtm             *slack.API
+	messenger      *Messenger
+	userManager    *usermanager.UserManager
+	platformClient *platform.Client
 }
 
-// SlackConfig defines a slack configuration parameters.
-type SlackConfig struct {
-	AccessToken string
+// Config defines a slack configuration parameters.
+type Config struct {
+	AccessToken   string
+	SigningSecret string
 }
 
 // NewAssistant returns a new assistant service.
-func NewAssistant(cfg *config.Credentials, appCfg *config.Config, pack *features.Pack) (*Assistant, error) {
-	slackCfg := &SlackConfig{
-		AccessToken: cfg.AccessToken,
+func NewAssistant(cfg *config.Credentials, appCfg *config.Config, handlerPrefix string, pack *features.Pack) (*Assistant, error) {
+	prefix := fmt.Sprintf("/%s", strings.Trim(handlerPrefix, "/"))
+
+	slackCfg := &Config{
+		AccessToken:   cfg.AccessToken,
+		SigningSecret: cfg.SigningSecret,
 	}
 
-	chatAPI := slack.New(slackCfg.AccessToken, slack.OptionDebug(appCfg.App.Debug))
+	chatAPI := slack.New(slackCfg.AccessToken)
 
-	rtm := chatAPI.NewRTM()
-
-	messenger := NewMessenger(rtm, slackCfg)
-	userInformer := NewUserInformer(rtm)
+	messenger := NewMessenger(chatAPI, slackCfg)
+	userInformer := NewUserInformer(chatAPI)
 	userManager := usermanager.NewUserManager(userInformer, appCfg.Enterprise.Quota)
 
-	platformManager, err := platform.NewClient(appCfg.Platform)
+	platformClient, err := platform.NewClient(appCfg.Platform)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create a Platform client")
 	}
 
 	assistant := &Assistant{
-		credentialsCfg:  cfg,
-		appCfg:          appCfg,
-		msgProcessors:   make(map[string]connection.MessageProcessor),
-		featurePack:     pack,
-		rtm:             rtm,
-		messenger:       messenger,
-		userManager:     userManager,
-		platformManager: platformManager,
+		credentialsCfg: cfg,
+		appCfg:         appCfg,
+		msgProcessors:  make(map[string]connection.MessageProcessor),
+		prefix:         prefix,
+		featurePack:    pack,
+		messenger:      messenger,
+		userManager:    userManager,
+		platformClient: platformClient,
 	}
 
 	return assistant, nil
 }
 
 func (a *Assistant) validateCredentials() error {
-	if a.credentialsCfg == nil || a.credentialsCfg.AccessToken == "" {
-		return errors.New(`"accessToken" must not be empty`)
+	if a.credentialsCfg == nil || a.credentialsCfg.AccessToken == "" || a.credentialsCfg.SigningSecret == "" {
+		return errors.New(`"accessToken" and "signingSecret" must not be empty`)
 	}
 
 	return nil
 }
 
 // Init registers assistant handlers.
-func (a *Assistant) Init(ctx context.Context) error {
-	log.Dbg("Init Slack")
+func (a *Assistant) Init(_ context.Context) error {
+	log.Dbg("URL-path prefix: ", a.prefix)
 
 	if err := a.validateCredentials(); err != nil {
 		return errors.Wrap(err, "invalid credentials given")
@@ -106,8 +115,9 @@ func (a *Assistant) Init(ctx context.Context) error {
 		return errors.New("no message processor set")
 	}
 
-	go a.rtm.ManageConnection()
-	go a.handleRTMEvents(ctx, a.rtm.IncomingEvents)
+	for path, handleFunc := range a.handlers() {
+		http.Handle(fmt.Sprintf("%s/%s", a.prefix, path), handleFunc)
+	}
 
 	return nil
 }
@@ -128,63 +138,8 @@ func (a *Assistant) buildMessageProcessor(dbLabInstance *dblab.Instance) *msgpro
 		EntOpts:  a.appCfg.Enterprise,
 	}
 
-	return msgproc.NewProcessingService(a.messenger, MessageValidator{}, dbLabInstance.Client(), a.userManager, a.platformManager,
+	return msgproc.NewProcessingService(a.messenger, MessageValidator{}, dbLabInstance.Client(), a.userManager, a.platformClient,
 		processingCfg, a.featurePack)
-}
-
-func (a *Assistant) handleRTMEvents(ctx context.Context, incomingEvents chan slack.RTMEvent) {
-	for msg := range incomingEvents {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		switch ev := msg.Data.(type) {
-		case *slack.MessageEvent:
-			log.Dbg("Event type: Message")
-
-			if ev.Msg.SubType != "" {
-				// Handle only normal messages.
-				continue
-			}
-
-			if ev.BotID != "" {
-				// Skip messages sent by bots.
-				continue
-			}
-
-			msgProcessor, err := a.getProcessingService(ev.Channel)
-			if err != nil {
-				log.Err("failed to get processing service", err)
-				continue
-			}
-
-			msg := a.messageEventToIncomingMessage(ev)
-			go msgProcessor.ProcessMessageEvent(ctx, msg)
-
-		case *slack.DesktopNotificationEvent:
-			log.Dbg(fmt.Sprintf("Desktop Notification: %v\n", ev))
-
-			msgProcessor, err := a.getProcessingService(ev.Channel)
-			if err != nil {
-				log.Err("failed to get processing service", err)
-				return
-			}
-
-			msg := a.desktopNotificationEventToIncomingMessage(ev)
-			msgProcessor.ProcessAppMentionEvent(msg)
-
-		case *slack.DisconnectedEvent:
-			log.Dbg(fmt.Sprintf("Disconnect event: %v\n", ev.Cause.Error()))
-
-		case *slack.LatencyReport:
-			log.Dbg(fmt.Sprintf("Current latency: %v\n", ev.Value))
-
-		default:
-			log.Dbg(fmt.Sprintf("Event filtered: skip %q event type", msg.Type))
-		}
-	}
 }
 
 // addProcessingService adds a message processor for a specific channel.
@@ -209,7 +164,7 @@ func (a *Assistant) getProcessingService(channelID string) (connection.MessagePr
 
 // CheckIdleSessions check the running user sessions for idleness.
 func (a *Assistant) CheckIdleSessions(ctx context.Context) {
-	log.Dbg("Check Slack idle sessions")
+	log.Dbg("Check idle sessions", a.prefix)
 
 	a.procMu.RLock()
 	for _, proc := range a.msgProcessors {
@@ -225,29 +180,132 @@ func (a *Assistant) lenMessageProcessor() int {
 	return len(a.msgProcessors)
 }
 
-// desktopNotificationEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
-func (a *Assistant) desktopNotificationEventToIncomingMessage(event *slack.DesktopNotificationEvent) models.IncomingMessage {
+func (a *Assistant) handlers() map[string]http.HandlerFunc {
+	return map[string]http.HandlerFunc{
+		"": a.handleEvent,
+	}
+}
+
+func (a *Assistant) handleEvent(w http.ResponseWriter, r *http.Request) {
+	log.Msg("Request received:", html.EscapeString(r.URL.Path))
+
+	// TODO(anatoly): Respond time according to Slack API timeouts policy.
+	// Slack sends retries in case of timeout responses.
+	if r.Header.Get("X-Slack-Retry-Num") != "" {
+		log.Dbg("Message filtered: Slack Retry")
+		return
+	}
+
+	if err := a.verifyRequest(r); err != nil {
+		log.Dbg("Message filtered: Verification failed:", err.Error())
+		w.WriteHeader(http.StatusForbidden)
+
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(r.Body); err != nil {
+		log.Err("Failed to read the request body:", err)
+		w.WriteHeader(http.StatusBadRequest)
+
+		return
+	}
+
+	body := buf.Bytes()
+
+	eventsAPIEvent, err := a.parseEvent(body)
+	if err != nil {
+		log.Err("Event parse error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
+	// TODO (akartasov): event processing function.
+	switch eventsAPIEvent.Type {
+	// Used to verify bot's API URL for Slack.
+	case slackevents.URLVerification:
+		log.Dbg("Event type: URL verification")
+
+		var r *slackevents.ChallengeResponse
+
+		err := json.Unmarshal(body, &r)
+		if err != nil {
+			log.Err("Challenge parse error:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "text")
+		_, _ = w.Write([]byte(r.Challenge))
+
+	// General Slack events.
+	case slackevents.CallbackEvent:
+		switch ev := eventsAPIEvent.InnerEvent.Data.(type) {
+		case *slackevents.AppMentionEvent:
+			log.Dbg("Event type: AppMention")
+
+			msgProcessor, err := a.getProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				return
+			}
+
+			msg := a.appMentionEventToIncomingMessage(ev)
+			msgProcessor.ProcessAppMentionEvent(msg)
+
+		case *slackevents.MessageEvent:
+			log.Dbg("Event type: Message")
+
+			if ev.BotID != "" {
+				// Skip messages sent by bots.
+				return
+			}
+
+			msgProcessor, err := a.getProcessingService(ev.Channel)
+			if err != nil {
+				log.Err("failed to get processing service", err)
+				return
+			}
+
+			msg := a.messageEventToIncomingMessage(ev)
+			msgProcessor.ProcessMessageEvent(context.TODO(), msg)
+
+		default:
+			log.Dbg("Event filtered: Inner event type not supported")
+		}
+
+	default:
+		log.Dbg("Event filtered: Event type not supported")
+	}
+}
+
+// appMentionEventToIncomingMessage converts a Slack application mention event to the standard incoming message.
+func (a *Assistant) appMentionEventToIncomingMessage(event *slackevents.AppMentionEvent) models.IncomingMessage {
 	inputEvent := models.IncomingMessage{
-		Text:      event.Content,
+		Text:      event.Text,
 		ChannelID: event.Channel,
-		Timestamp: event.Timestamp,
+		UserID:    event.User,
+		Timestamp: event.TimeStamp,
+		ThreadID:  event.ThreadTimeStamp,
 	}
 
 	return inputEvent
 }
 
 // messageEventToIncomingMessage converts a Slack message event to the standard incoming message.
-func (a *Assistant) messageEventToIncomingMessage(event *slack.MessageEvent) models.IncomingMessage {
+func (a *Assistant) messageEventToIncomingMessage(event *slackevents.MessageEvent) models.IncomingMessage {
 	message := unfurlLinks(event.Text)
 
 	inputEvent := models.IncomingMessage{
 		SubType:     event.SubType,
 		Text:        message,
 		ChannelID:   event.Channel,
-		ChannelType: event.Type,
+		ChannelType: event.ChannelType,
 		UserID:      event.User,
-		Timestamp:   event.Timestamp,
-		ThreadID:    event.ThreadTimestamp,
+		Timestamp:   event.TimeStamp,
+		ThreadID:    event.ThreadTimeStamp,
 	}
 
 	// Skip messages sent by bots.
@@ -274,4 +332,35 @@ func unfurlLinks(text string) string {
 	}
 
 	return text
+}
+
+// parseEvent parses slack events.
+func (a *Assistant) parseEvent(rawEvent []byte) (slackevents.EventsAPIEvent, error) {
+	return slackevents.ParseEvent(rawEvent, slackevents.OptionNoVerifyToken())
+}
+
+// verifyRequest verifies a request coming from Slack
+func (a *Assistant) verifyRequest(r *http.Request) error {
+	secretsVerifier, err := slack.NewSecretsVerifier(r.Header, a.credentialsCfg.SigningSecret)
+	if err != nil {
+		return errors.Wrap(err, "failed to init the secrets verifier")
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return errors.Wrap(err, "failed to read the request body")
+	}
+
+	// Set a body with the same data we read.
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+	if _, err := secretsVerifier.Write(body); err != nil {
+		return errors.Wrap(err, "failed to prepare the request body")
+	}
+
+	if err := secretsVerifier.Ensure(); err != nil {
+		return errors.Wrap(err, "failed to ensure a secret token")
+	}
+
+	return nil
 }

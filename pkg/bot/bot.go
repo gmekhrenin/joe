@@ -24,6 +24,7 @@ import (
 	"gitlab.com/postgres-ai/joe/pkg/config"
 	"gitlab.com/postgres-ai/joe/pkg/connection"
 	"gitlab.com/postgres-ai/joe/pkg/connection/slack"
+	"gitlab.com/postgres-ai/joe/pkg/connection/slackrtm"
 	"gitlab.com/postgres-ai/joe/pkg/connection/webui"
 	"gitlab.com/postgres-ai/joe/pkg/services/dblab"
 	"gitlab.com/postgres-ai/joe/pkg/util"
@@ -153,12 +154,16 @@ func (a *App) getAllAssistants() ([]connection.Assistant, error) {
 }
 
 func (a *App) getAssistant(communicationTypeType string, workspaceCfg config.Workspace) (connection.Assistant, error) {
+	handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
+
 	switch communicationTypeType {
 	case slack.CommunicationType:
-		return slack.NewAssistant(&workspaceCfg.Credentials, a.Config, a.featurePack)
+		return slack.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack)
+
+	case slackrtm.CommunicationType:
+		return slackrtm.NewAssistant(&workspaceCfg.Credentials, a.Config, a.featurePack)
 
 	case webui.CommunicationType:
-		handlerPrefix := fmt.Sprintf("/%s", communicationTypeType)
 		return webui.NewAssistant(&workspaceCfg.Credentials, a.Config, handlerPrefix, a.featurePack)
 
 	default:
