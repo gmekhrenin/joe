@@ -2,7 +2,7 @@
 Boost your backend development process
 
 <div align="center">
-    ![Joe Demo](./assets/demo.gif)
+    <img src="./assets/demo.gif" align="center" border="0" />
 </div>
 
 Provide developers access to experiment on automatically provisioned
