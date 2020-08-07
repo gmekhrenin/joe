@@ -307,7 +307,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		// TODO(akartasov): Find permanent solution,
 		//  it's a temporary fix for https://gitlab.com/postgres-ai/joe/-/issues/132.
 		if err != nil {
-			log.Err(fmt.Sprintf("Failed to reset session: %v. Try to reboot session.", err))
+			log.Err(fmt.Sprintf("Failed to reset session: %v. Trying to reboot session.", err))
 
 			// Try to reboot the session.
 			if err := s.rebootSession(msg, user); err != nil {
