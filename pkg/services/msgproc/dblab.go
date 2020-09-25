@@ -81,7 +81,7 @@ var hintExecDdlWords = []string{"alter", "create", "drop", "set"}
 func (s *ProcessingService) runSession(ctx context.Context, user *usermanager.User, incomingMessage models.IncomingMessage) (err error) {
 	sMsg := models.NewMessage(incomingMessage)
 
-	if user.Session.Clone != nil && user.Session.ChannelID == sMsg.ChannelID {
+	if user.Session.Clone != nil {
 		return nil
 	}
 
