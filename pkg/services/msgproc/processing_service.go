@@ -156,7 +156,7 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 		return
 	}
 
-	if err := s.prepareSession(user, incomingMessage); err != nil {
+	if err := s.prepareUserSession(user, incomingMessage); err != nil {
 		log.Err(err)
 		return
 	}
@@ -399,7 +399,8 @@ func (s *ProcessingService) saveHistory(ctx context.Context, msg *models.Message
 	return nil
 }
 
-func (s *ProcessingService) prepareSession(user *usermanager.User, incomingMessage models.IncomingMessage) error {
+// prepareUserSession sets base properties for the user session according to the incoming message.
+func (s *ProcessingService) prepareUserSession(user *usermanager.User, incomingMessage models.IncomingMessage) error {
 	if user.Session.ChannelID != "" && user.Session.ChannelID != incomingMessage.ChannelID {
 		if err := s.destroySession(user); err != nil {
 			return errors.Wrap(err, "failed to destroy old user session")
