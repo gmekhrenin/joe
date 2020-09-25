@@ -157,8 +157,11 @@ func (s *ProcessingService) ProcessMessageEvent(ctx context.Context, incomingMes
 	}
 
 	user.Session.LastActionTs = time.Now()
-	user.Session.ChannelID = incomingMessage.ChannelID
 	user.Session.Direct = incomingMessage.Direct
+
+	if user.Session.ChannelID == "" {
+		user.Session.ChannelID = incomingMessage.ChannelID
+	}
 
 	if user.Session.PlatformSessionID == "" {
 		user.Session.PlatformSessionID = incomingMessage.SessionID
